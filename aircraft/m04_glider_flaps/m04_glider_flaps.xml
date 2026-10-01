@@ -1,0 +1,349 @@
+<?xml version="1.0"?>
+<!--
+  Module 04: a small UAS glider built from scratch (5 kg, 3 m span).
+
+  Aerodynamic model: classic linear stability-derivative build-up plus a
+  CL(alpha) table with stall and a parabolic drag polar.  Numbers are
+  representative of a high-aspect-ratio RC/UAS sailplane - invented for
+  teaching, not a real airframe.
+
+  Structural frame (all <location>s): origin at the nose, x aft, y right, z up.
+-->
+<fdm_config name="m04_glider_flaps" version="2.0" release="ALPHA">
+
+  <fileheader>
+    <author> JSBSim GNC Lab </author>
+    <description> 5 kg UAS glider with flaps (Module 04 exercise solution) </description>
+  </fileheader>
+
+  <metrics>
+    <wingarea unit="M2"> 0.80 </wingarea>
+    <wingspan unit="M">  3.00 </wingspan>
+    <chord    unit="M">  0.27 </chord>
+    <htailarea unit="M2"> 0.10 </htailarea>
+    <htailarm  unit="M">  1.00 </htailarm>
+    <vtailarea unit="M2"> 0.05 </vtailarea>
+    <vtailarm  unit="M">  1.00 </vtailarm>
+    <!-- Aero reference point = where the coefficients below are referenced.
+         Put it at the CG so Cm is about the CG (Module 05 moves the CG). -->
+    <location name="AERORP" unit="M"> <x> 0.40 </x> <y> 0 </y> <z> 0 </z> </location>
+    <location name="VRP"    unit="M"> <x> 0.40 </x> <y> 0 </y> <z> 0 </z> </location>
+  </metrics>
+
+  <mass_balance>
+    <ixx unit="KG*M2"> 1.50 </ixx>
+    <iyy unit="KG*M2"> 0.40 </iyy>
+    <izz unit="KG*M2"> 1.80 </izz>
+    <ixz unit="KG*M2"> 0.00 </ixz>
+    <emptywt unit="KG"> 5.0 </emptywt>
+    <location name="CG" unit="M"> <x> 0.40 </x> <y> 0 </y> <z> 0 </z> </location>
+  </mass_balance>
+
+  <!-- Belly skid, tail skid and wingtips -->
+  <ground_reactions>
+    <contact type="STRUCTURE" name="NOSE_SKID">
+      <location unit="M"> <x> 0.10 </x> <y> 0 </y> <z> -0.08 </z> </location>
+      <static_friction> 0.5 </static_friction> <dynamic_friction> 0.4 </dynamic_friction>
+      <spring_coeff unit="N/M"> 3000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 100 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="TAIL_SKID">
+      <location unit="M"> <x> 1.40 </x> <y> 0 </y> <z> -0.02 </z> </location>
+      <static_friction> 0.5 </static_friction> <dynamic_friction> 0.4 </dynamic_friction>
+      <spring_coeff unit="N/M"> 1500 </spring_coeff> <damping_coeff unit="N/M/SEC"> 50 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="LEFT_TIP">
+      <location unit="M"> <x> 0.45 </x> <y> -1.5 </y> <z> 0.05 </z> </location>
+      <static_friction> 0.5 </static_friction> <dynamic_friction> 0.4 </dynamic_friction>
+      <spring_coeff unit="N/M"> 1500 </spring_coeff> <damping_coeff unit="N/M/SEC"> 50 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="RIGHT_TIP">
+      <location unit="M"> <x> 0.45 </x> <y> 1.5 </y> <z> 0.05 </z> </location>
+      <static_friction> 0.5 </static_friction> <dynamic_friction> 0.4 </dynamic_friction>
+      <spring_coeff unit="N/M"> 1500 </spring_coeff> <damping_coeff unit="N/M/SEC"> 50 </damping_coeff>
+    </contact>
+  </ground_reactions>
+
+  <propulsion/>
+
+  <!-- Flight control system: normalized commands -> surface angles [rad].
+       The pitch-trim and roll/yaw-trim inputs are what JSBSim's trim routine
+       moves, so they must be summed into the surfaces. -->
+  <flight_control name="FCS">
+    <channel name="Pitch">
+      <summer name="fcs/pitch-sum">
+        <input> fcs/elevator-cmd-norm </input>
+        <input> fcs/pitch-trim-cmd-norm </input>
+        <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+      </summer>
+      <aerosurface_scale name="fcs/elevator-control">
+        <input> fcs/pitch-sum </input>
+        <range> <min> -0.35 </min> <max> 0.35 </max> </range>   <!-- +/- 20 deg -->
+        <output> fcs/elevator-pos-rad </output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Roll">
+      <summer name="fcs/roll-sum">
+        <input> fcs/aileron-cmd-norm </input>
+        <input> fcs/roll-trim-cmd-norm </input>
+        <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+      </summer>
+      <aerosurface_scale name="fcs/aileron-control">
+        <input> fcs/roll-sum </input>
+        <range> <min> -0.30 </min> <max> 0.30 </max> </range>
+        <output> fcs/left-aileron-pos-rad </output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Yaw">
+      <summer name="fcs/yaw-sum">
+        <input> fcs/rudder-cmd-norm </input>
+        <input> fcs/yaw-trim-cmd-norm </input>
+        <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+      </summer>
+      <aerosurface_scale name="fcs/rudder-control">
+        <input> fcs/yaw-sum </input>
+        <range> <min> -0.35 </min> <max> 0.35 </max> </range>
+        <output> fcs/rudder-pos-rad </output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Flaps">
+      <!-- Exercise solution: 0..1 command -> rate-limited flap, 0..20 deg -->
+      <actuator name="fcs/flap-actuator">
+        <input> fcs/flap-cmd-norm </input>
+        <rate_limit> 0.5 </rate_limit>          <!-- full travel in 2 s -->
+        <clipto> <min> 0 </min> <max> 1 </max> </clipto>
+        <output> fcs/flap-pos-norm </output>
+      </actuator>
+      <pure_gain name="fcs/flap-pos-deg">
+        <input> fcs/flap-pos-norm </input>
+        <gain> 20.0 </gain>
+      </pure_gain>
+    </channel>
+  </flight_control>
+
+  <!--
+    Aerodynamics.  JSBSim sums every <function> in an <axis>:
+      DRAG, SIDE, LIFT  -> forces in the wind frame   [lbf]  = qbar*S*C
+      ROLL, PITCH, YAW  -> moments in the body frame  [lbf*ft] = qbar*S*(b or c)*C
+    Rates are made non-dimensional with aero/bi2vel = b/(2V) and aero/ci2vel = c/(2V).
+  -->
+  <aerodynamics>
+
+    <axis name="LIFT">
+      <function name="aero/force/L_alpha">
+        <description> Lift vs alpha, with stall (table includes CL0) </description>
+        <product>
+          <property> aero/qbar-psf </property>
+          <property> metrics/Sw-sqft </property>
+          <table>
+            <independentVar lookup="row"> aero/alpha-rad </independentVar>
+            <tableData>
+              -0.30  -0.90
+              -0.20  -0.70
+               0.00   0.30
+               0.17   1.15
+               0.21   1.25
+               0.25   1.10
+               0.35   0.85
+               0.80   0.80
+            </tableData>
+          </table>
+        </product>
+      </function>
+      <function name="aero/force/L_q">
+        <description> Lift due to pitch rate, CLq = 6.0 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> aero/ci2vel </property> <property> velocities/q-aero-rad_sec </property>
+          <value> 6.0 </value>
+        </product>
+      </function>
+      <function name="aero/force/L_de">
+        <description> Lift due to elevator, CLde = 0.40 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> fcs/elevator-pos-rad </property> <value> 0.40 </value>
+        </product>
+      </function>
+      <function name="aero/force/L_flap">
+        <description> Exercise: delta CL = 0.50 at full flap </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> fcs/flap-pos-norm </property> <value> 0.50 </value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="DRAG">
+      <function name="aero/force/D_polar">
+        <description> Parabolic polar CD = CD0 + K*CL^2, CD0 = 0.020, K = 0.0333 (e = 0.85, AR = 11.25) </description>
+        <product>
+          <property> aero/qbar-psf </property>
+          <property> metrics/Sw-sqft </property>
+          <sum>
+            <value> 0.020 </value>
+            <product>
+              <value> 0.0333 </value>
+              <pow>
+                <quotient>
+                  <property> aero/force/L_alpha </property>
+                  <product> <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property> </product>
+                </quotient>
+                <value> 2 </value>
+              </pow>
+            </product>
+          </sum>
+        </product>
+      </function>
+      <function name="aero/force/D_beta">
+        <description> Drag due to sideslip </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <abs> <property> aero/beta-rad </property> </abs> <value> 0.15 </value>
+        </product>
+      </function>
+      <function name="aero/force/D_flap">
+        <description> Exercise: delta CD = 0.025 at full flap </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> fcs/flap-pos-norm </property> <value> 0.025 </value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="SIDE">
+      <function name="aero/force/Y_beta">
+        <description> CYbeta = -0.30 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> aero/beta-rad </property> <value> -0.30 </value>
+        </product>
+      </function>
+      <function name="aero/force/Y_dr">
+        <description> CYdr = 0.15 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> fcs/rudder-pos-rad </property> <value> 0.15 </value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="PITCH">
+      <function name="aero/moment/Cm0">
+        <description> Cm0 = 0.03 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/cbarw-ft </property> <value> 0.03 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cm_alpha">
+        <description> Cmalpha = -0.80 (static margin ~ 0.16 cbar with CLalpha ~ 5) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/cbarw-ft </property> <property> aero/alpha-rad </property>
+          <value> -0.80 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cm_q">
+        <description> Cmq = -12 (pitch damping) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/cbarw-ft </property> <property> aero/ci2vel </property>
+          <property> velocities/q-aero-rad_sec </property> <value> -12.0 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cm_de">
+        <description> Cmde = -1.20 (elevator power) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/cbarw-ft </property> <property> fcs/elevator-pos-rad </property>
+          <value> -1.20 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cm_flap">
+        <description> Exercise: delta Cm = -0.02 at full flap (nose down) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/cbarw-ft </property> <property> fcs/flap-pos-norm </property>
+          <value> -0.02 </value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="ROLL">
+      <function name="aero/moment/Cl_beta">
+        <description> Clbeta = -0.10 (dihedral effect; spiral stable since Clb*Cnr > Cnb*Clr) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/beta-rad </property> <value> -0.10 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cl_p">
+        <description> Clp = -0.50 (roll damping) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/bi2vel </property>
+          <property> velocities/p-aero-rad_sec </property> <value> -0.50 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cl_r">
+        <description> Clr = 0.12 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/bi2vel </property>
+          <property> velocities/r-aero-rad_sec </property> <value> 0.12 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cl_da">
+        <description> Clda = 0.20 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> fcs/left-aileron-pos-rad </property>
+          <value> 0.20 </value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="YAW">
+      <function name="aero/moment/Cn_beta">
+        <description> Cnbeta = 0.06 (weathercock stability) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/beta-rad </property> <value> 0.06 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cn_p">
+        <description> Cnp = -0.04 </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/bi2vel </property>
+          <property> velocities/p-aero-rad_sec </property> <value> -0.04 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cn_r">
+        <description> Cnr = -0.08 (yaw damping) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> aero/bi2vel </property>
+          <property> velocities/r-aero-rad_sec </property> <value> -0.08 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cn_da">
+        <description> Cnda = -0.01 (adverse yaw) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> fcs/left-aileron-pos-rad </property>
+          <value> -0.01 </value>
+        </product>
+      </function>
+      <function name="aero/moment/Cn_dr">
+        <description> Cndr = -0.05 (positive rudder = trailing edge left = nose left) </description>
+        <product>
+          <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
+          <property> metrics/bw-ft </property> <property> fcs/rudder-pos-rad </property>
+          <value> -0.05 </value>
+        </product>
+      </function>
+    </axis>
+
+  </aerodynamics>
+</fdm_config>

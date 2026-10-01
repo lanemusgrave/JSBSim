@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+<!--
+  Module 04: a dropsonde-like sphere with a reefable parachute.
+  Built from scratch to show the minimum an aircraft file needs.
+
+  Sphere: diameter 0.40 m, mass 15 kg, CD = 0.47 (subcritical Reynolds number).
+  Parachute: CD*S = 1.5 * 3.0 m^2, deployed with fcs/chute-cmd-norm (0..1).
+-->
+<fdm_config name="m04_ball" version="2.0" release="ALPHA">
+
+  <fileheader>
+    <author> JSBSim GNC Lab </author>
+    <description> Sphere with parachute (Module 04) </description>
+  </fileheader>
+
+  <!-- Reference geometry.  For a sphere: reference area = frontal area. -->
+  <metrics>
+    <wingarea unit="M2"> 0.12566 </wingarea>   <!-- pi * 0.2^2 -->
+    <wingspan unit="M"> 0.40 </wingspan>
+    <chord    unit="M"> 0.40 </chord>
+    <!-- All <location>s are in the STRUCTURAL frame: x aft, y right, z up -->
+    <location name="AERORP" unit="M"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+    <location name="VRP"    unit="M"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </metrics>
+
+  <mass_balance>
+    <!-- Solid-ish sphere: I = 2/5 m r^2 = 0.24 kg m^2 -->
+    <ixx unit="KG*M2"> 0.24 </ixx>
+    <iyy unit="KG*M2"> 0.24 </iyy>
+    <izz unit="KG*M2"> 0.24 </izz>
+    <emptywt unit="KG"> 15.0 </emptywt>
+    <location name="CG" unit="M"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </mass_balance>
+
+  <!-- Contact points are fixed in the BODY: a single "bottom" point would
+       rotate away (and the ball sink through the ground) as soon as friction
+       makes it roll.  Six points on the surface: whichever faces down touches.
+       Spring/damper sized so the default 120 Hz step is stable:
+       c/m * dt = 400/15/120 = 0.22 (compare the bundled 'ball', Module 02). -->
+  <ground_reactions>
+    <contact type="STRUCTURE" name="BOTTOM">
+      <location unit="M"> <x> 0 </x> <y> 0 </y> <z> -0.2 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="TOP">
+      <location unit="M"> <x> 0 </x> <y> 0 </y> <z> 0.2 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="FRONT">
+      <location unit="M"> <x> -0.2 </x> <y> 0 </y> <z> 0 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="BACK">
+      <location unit="M"> <x> 0.2 </x> <y> 0 </y> <z> 0 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="LEFT">
+      <location unit="M"> <x> 0 </x> <y> -0.2 </y> <z> 0 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="RIGHT">
+      <location unit="M"> <x> 0 </x> <y> 0.2 </y> <z> 0 </z> </location>
+      <static_friction> 0.8 </static_friction> <dynamic_friction> 0.5 </dynamic_friction>
+      <spring_coeff unit="N/M"> 30000 </spring_coeff> <damping_coeff unit="N/M/SEC"> 400 </damping_coeff>
+    </contact>
+  </ground_reactions>
+
+  <!-- The parachute is an external force acting opposite the relative wind. -->
+  <external_reactions>
+    <property> fcs/chute-pos-norm </property>
+    <force name="parachute" frame="WIND">
+      <function>
+        <product>
+          <property> aero/qbar-psf </property>
+          <property> fcs/chute-pos-norm </property>
+          <value> 48.44 </value>  <!-- CD*S = 1.5 * 3.0 m^2 = 4.5 m^2 = 48.44 ft^2 -->
+        </product>
+      </function>
+      <!-- Riser attachment 0.2 m AFT of the CG (structural x is positive aft):
+           drag acting behind the CG weathervanes the body into the wind.
+           Put it at x = -0.2 (in front) and watch the ball tumble. -->
+      <location unit="M"> <x> 0.20 </x> <y> 0 </y> <z> 0 </z> </location>
+      <direction> <x> -1 </x> <y> 0 </y> <z> 0 </z> </direction>
+    </force>
+  </external_reactions>
+
+  <propulsion/>
+
+  <!-- The "FCS" here is just the chute inflating over ~1.5 s -->
+  <system name="parachute">
+    <property value="0"> fcs/chute-cmd-norm </property>
+    <channel name="chute">
+      <lag_filter name="chute inflation">
+        <input> fcs/chute-cmd-norm </input>
+        <c1> 2.0 </c1>   <!-- 1/tau: tau = 0.5 s -->
+        <output> fcs/chute-pos-norm </output>
+      </lag_filter>
+    </channel>
+  </system>
+
+  <aerodynamics>
+    <axis name="DRAG">
+      <function name="aero/force/D_sphere">
+        <description> Sphere drag: qbar * S * CD </description>
+        <product>
+          <property> aero/qbar-psf </property>
+          <property> metrics/Sw-sqft </property>
+          <value> 0.47 </value>
+        </product>
+      </function>
+    </axis>
+  </aerodynamics>
+
+</fdm_config>
