@@ -91,6 +91,7 @@ def make_fdm(
     dt: float = 1.0 / 120.0,
     quiet: bool = True,
     output: bool = False,
+    systems_dir: str | Path | None = None,
 ) -> jsbsim.FGFDMExec:
     """Create an FGFDMExec and load ``aircraft``.
 
@@ -100,6 +101,10 @@ def make_fdm(
 
     ``output=False`` disables any ``<output>`` file the aircraft file requests,
     so lessons do not litter CSV files in your working directory.
+
+    ``systems_dir``: folder searched for ``<system file="...">`` includes.
+    Default for repo aircraft: ``aircraft/<name>/fcs/``.  Point it at your own
+    folder to fly your own autopilot XML with the same airframe.
     """
     if quiet:
         quiet_jsbsim()
@@ -110,7 +115,9 @@ def make_fdm(
     fdm.set_output_path(str(OUTPUT_DIR))
     if (AIRCRAFT_DIR / aircraft).is_dir():
         fdm.set_aircraft_path(str(AIRCRAFT_DIR))
-        fdm.set_systems_path(str(AIRCRAFT_DIR / aircraft / "systems"))
+        fdm.set_systems_path(str(Path(systems_dir) if systems_dir else AIRCRAFT_DIR / aircraft / "fcs"))
+    elif systems_dir:
+        fdm.set_systems_path(str(systems_dir))
     if not fdm.load_model(aircraft):
         raise RuntimeError(f"JSBSim could not load aircraft '{aircraft}'")
     if not output:
@@ -140,8 +147,10 @@ def load_script(
     fdm = jsbsim.FGFDMExec(jsbsim.get_default_root_dir())
     OUTPUT_DIR.mkdir(exist_ok=True)
     fdm.set_output_path(str(OUTPUT_DIR))
-    if _uses_repo_aircraft(script):
+    name = _uses_repo_aircraft(script)
+    if name:
         fdm.set_aircraft_path(str(AIRCRAFT_DIR))
+        fdm.set_systems_path(str(AIRCRAFT_DIR / name / "fcs"))
     path = Path(script)
     if path.exists():
         path = path.resolve()
@@ -154,15 +163,16 @@ def load_script(
     return fdm
 
 
-def _uses_repo_aircraft(script: str | Path) -> bool:
-    """True if the script's ``<use aircraft="...">`` names a model in aircraft/."""
+def _uses_repo_aircraft(script: str | Path) -> str:
+    """Aircraft name if the script's ``<use aircraft="...">`` is in aircraft/, else ""."""
     import xml.etree.ElementTree as ET
 
     path = Path(script)
     if not path.exists():
-        return False
+        return ""
     use = ET.parse(path).getroot().find("use")
-    return use is not None and (AIRCRAFT_DIR / use.get("aircraft", "")).is_dir()
+    name = use.get("aircraft", "") if use is not None else ""
+    return name if name and (AIRCRAFT_DIR / name).is_dir() else ""
 
 
 def initialize(
