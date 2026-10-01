@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  Module 03 exercise: write a test card that the C172 autopilot flies.
+  Run it with:
+     python modules/03_scripts_events_output/solutions/run_card.py modules/03_scripts_events_output/exercises/my_card.xml
+
+  Card to implement:
+    t = 1 s   trim (simulation/do_simple_trim = 1), engage altitude hold at
+              4000 ft and heading hold on 200 deg.  Properties you need:
+                 ap/altitude_setpoint, ap/altitude_hold,
+                 guidance/specified-heading-rad, guidance/heading-selector-switch (1),
+                 ap/roll-attitude-mode (1), ap/autopilot-roll-on (1)
+    t = 15 s  command heading 290 deg (radians!)
+    when heading is within +/-2 deg of 290 (and t > 16 s): notify the heading,
+              then command 4500 ft
+    end at 100 s; log airspeed, altitude, heading, bank, both commands at 10 Hz
+
+  Then answer (comment at the bottom): what bank angle does the C172 heading
+  hold use, how long did the 90 deg turn take, and what happens to airspeed in
+  the climb?  Why?
+-->
+<runscript name="My C172 autopilot card">
+  <use aircraft="c172x" initialize="reset01"/>
+
+  <output name="my_card.csv" type="CSV" rate="10">
+    <property caption="kcas">   velocities/vc-kts </property>
+    <property caption="alt_ft"> position/h-sl-ft  </property>
+    <!-- TODO: heading, bank, heading command, altitude command -->
+  </output>
+
+  <run start="0.0" end="100" dt="0.008333333333">
+
+    <event name="Trim">
+      <condition> simulation/sim-time-sec ge 1 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <!-- TODO: engage the autopilot modes -->
+      <notify/>
+    </event>
+
+    <!-- TODO: heading-change event -->
+
+    <!-- TODO: "on heading" event with a multi-line (AND) condition -->
+
+  </run>
+</runscript>
