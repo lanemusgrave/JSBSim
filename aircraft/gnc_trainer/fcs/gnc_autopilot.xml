@@ -134,4 +134,99 @@
     </switch>
   </channel>
 
+  <!-- ===================== LATERAL-DIRECTIONAL (Module 10) ===================== -->
+  <property value="0">      ap/roll-hold-on </property>     <!-- inner loop: phi -> aileron -->
+  <property value="0">      ap/course-hold-on </property>   <!-- outer loop: course -> phi_c -->
+  <property value="0">      ap/yaw-damper-on </property>
+  <property value="0">      ap/phi-cmd-ext-rad </property>  <!-- manual bank command when course hold is off -->
+  <property value="0">      ap/chi-cmd-rad </property>
+  <property value="0.5236"> ap/phi-max-rad </property>      <!-- +/- 30 deg -->
+
+  <property value="1.43239">  ap/gains/kp-phi </property>   <!-- aileron norm per rad -->
+  <property value="0">        ap/gains/kd-phi </property>   <!-- airframe roll damping is enough -->
+  <property value="2.70632">  ap/gains/kp-chi </property>   <!-- rad bank per rad course error -->
+  <property value="0.319224"> ap/gains/ki-chi </property>
+  <property value="0.23">     ap/gains/kr-yaw </property>   <!-- rudder norm per rad/s (washed out) -->
+  <property value="1">        ap/gains/washout-c1 </property>
+
+  <channel name="Course hold">
+    <!-- wrap the course error to [-pi, pi]: atan2(sin e, cos e) -->
+    <fcs_function name="ap/chi-error-rad">
+      <function>
+        <atan2>
+          <sin> <difference> <property> ap/chi-cmd-rad </property> <property> fb/chi-rad </property> </difference> </sin>
+          <cos> <difference> <property> ap/chi-cmd-rad </property> <property> fb/chi-rad </property> </difference> </cos>
+        </atan2>
+      </function>
+    </fcs_function>
+    <fcs_function name="ap/chi-int-trigger">     <!-- -1 reset when off; +1 freeze while bank is saturated -->
+      <function>
+        <ifthen>
+          <eq> <property> ap/course-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <gt> <abs> <property> ap/phi-cmd-raw </property> </abs> <property> ap/phi-max-rad </property> </gt>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/chi-pi">
+      <input> ap/chi-error-rad </input>
+      <kp> ap/gains/kp-chi </kp>
+      <ki type="trap"> ap/gains/ki-chi </ki>
+      <trigger> ap/chi-int-trigger </trigger>
+    </pid>
+    <switch name="ap/phi-cmd-raw">
+      <default value="ap/phi-cmd-ext-rad"/>
+      <test value="ap/chi-pi"> ap/course-hold-on == 1 </test>
+    </switch>
+    <fcs_function name="ap/phi-cmd-rad">
+      <function>
+        <max>
+          <product> <value> -1 </value> <property> ap/phi-max-rad </property> </product>
+          <min> <property> ap/phi-cmd-raw </property> <property> ap/phi-max-rad </property> </min>
+        </max>
+      </function>
+    </fcs_function>
+  </channel>
+
+  <channel name="Roll hold">
+    <summer name="ap/phi-error-rad">
+      <input> ap/phi-cmd-rad </input>
+      <input> -fb/phi-rad </input>
+    </summer>
+    <pure_gain name="ap/da-p"> <input> ap/phi-error-rad </input> <gain> ap/gains/kp-phi </gain> </pure_gain>
+    <pure_gain name="ap/da-d"> <input> fb/p-rad_sec </input>     <gain> ap/gains/kd-phi </gain> </pure_gain>
+    <summer name="ap/da-cmd">
+      <input> ap/da-p </input>
+      <input> -ap/da-d </input>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </summer>
+    <switch name="ap/aileron-out">
+      <default value="0"/>
+      <test value="ap/da-cmd"> ap/roll-hold-on == 1 </test>
+      <output> ap/aileron-cmd-norm </output>
+    </switch>
+  </channel>
+
+  <channel name="Yaw damper">
+    <!-- washout: damps the Dutch roll but does not fight the steady yaw rate of a turn -->
+    <washout_filter name="ap/r-washed">
+      <input> fb/r-rad_sec </input>
+      <c1> ap/gains/washout-c1 </c1>
+    </washout_filter>
+    <pure_gain name="ap/dr-cmd">
+      <input> ap/r-washed </input>
+      <gain> ap/gains/kr-yaw </gain>
+      <clipto> <min> -0.5 </min> <max> 0.5 </max> </clipto>
+    </pure_gain>
+    <switch name="ap/rudder-out">
+      <default value="0"/>
+      <test value="ap/dr-cmd"> ap/yaw-damper-on == 1 </test>
+      <output> ap/rudder-cmd-norm </output>
+    </switch>
+  </channel>
+
 </system>
