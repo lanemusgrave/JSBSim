@@ -81,6 +81,52 @@ def make_fdm(
     return fdm
 
 
+def load_script(
+    script: str | Path,
+    quiet: bool = True,
+    output: bool = False,
+    dt: float = 0.0,
+) -> jsbsim.FGFDMExec:
+    """Create an FGFDMExec and load a JSBSim *script* (``<runscript>`` XML).
+
+    ``script`` can be a path relative to the JSBSim data folder (e.g.
+    ``"scripts/c1723.xml"`` for the bundled scripts) or a path to one of your
+    own script files.  The script names the aircraft and initial conditions
+    and contains timed/conditional *events*.  After loading, call ``fdm.run()``
+    until it returns False (the script's end time).
+
+    With ``output=True`` any ``<output>`` files land in ``outputs/``.
+    """
+    if quiet:
+        quiet_jsbsim()
+    fdm = jsbsim.FGFDMExec(jsbsim.get_default_root_dir())
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    fdm.set_output_path(str(OUTPUT_DIR))
+    if _uses_repo_aircraft(script):
+        fdm.set_aircraft_path(str(AIRCRAFT_DIR))
+    path = Path(script)
+    if path.exists():
+        path = path.resolve()
+    if not fdm.load_script(str(path), dt):
+        raise RuntimeError(f"JSBSim could not load script '{script}'")
+    if not output:
+        fdm.disable_output()
+    if not fdm.run_ic():
+        raise RuntimeError("run_ic() failed")
+    return fdm
+
+
+def _uses_repo_aircraft(script: str | Path) -> bool:
+    """True if the script's ``<use aircraft="...">`` names a model in aircraft/."""
+    import xml.etree.ElementTree as ET
+
+    path = Path(script)
+    if not path.exists():
+        return False
+    use = ET.parse(path).getroot().find("use")
+    return use is not None and (AIRCRAFT_DIR / use.get("aircraft", "")).is_dir()
+
+
 def initialize(
     fdm: jsbsim.FGFDMExec,
     ic: Mapping[str, float] | None = None,
@@ -93,6 +139,10 @@ def initialize(
     ``{"h-sl-ft": 5000, "vc-kts": 100}``.  Extra keyword ``props`` are written
     verbatim *after* the IC (use ``{"fcs/throttle-cmd-norm": 0.7}`` style dicts
     via ``**{...}`` for names with slashes).
+
+    Keys are written in dict order, and order matters: put position
+    (lat/long/altitude) before airspeed.  Writing ``ic/lat-geod-deg`` after
+    ``ic/vc-kts`` keeps the true airspeed and changes the calibrated one.
     """
     for key, value in (ic or {}).items():
         name = key if key.startswith("ic/") else f"ic/{key}"
