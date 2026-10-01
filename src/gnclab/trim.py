@@ -74,3 +74,55 @@ def trim_summary(fdm: jsbsim.FGFDMExec) -> dict[str, float]:
         except (KeyError, jsbsim.BaseError):  # pragma: no cover
             continue
     return out
+
+
+def trim_custom(
+    fdm: jsbsim.FGFDMExec,
+    fixed: dict[str, float],
+    unknowns: dict[str, tuple[float, float, float]],
+    residuals: tuple[str, ...] = ("accelerations/udot-ft_sec2",
+                                  "accelerations/wdot-ft_sec2",
+                                  "accelerations/qdot-rad_sec2"),
+    weights: tuple[float, ...] | None = None,
+) -> dict[str, float]:
+    """Solve for an equilibrium with scipy instead of JSBSim's trim routine.
+
+    ``fixed``    : property -> value written before every evaluation
+                   (e.g. ``{"ic/vt-fps": 48, "ic/h-sl-ft": 3000}``).
+    ``unknowns`` : property -> (initial guess, lower bound, upper bound), e.g.
+                   ``{"ic/alpha-rad": (0.05, -0.2, 0.3), "ic/gamma-rad": (-0.05, -0.5, 0.2),
+                   "fcs/pitch-trim-cmd-norm": (0, -1, 1)}``.
+    ``residuals``: properties driven to zero (default: u-dot, w-dot, q-dot).
+
+    Each evaluation writes the values, calls ``run_ic()`` (which runs every
+    model once with integration suspended) and reads the accelerations.
+    Works for vehicles JSBSim's trim cannot handle (gliders, odd controls).
+    Body rates are zeroed, so this is for wings-level, non-turning equilibria.
+    Returns the solution plus ``cost`` (sum of squared weighted residuals).
+    """
+    from scipy.optimize import least_squares
+
+    names = list(unknowns)
+    x0 = [unknowns[n][0] for n in names]
+    lo = [unknowns[n][1] for n in names]
+    hi = [unknowns[n][2] for n in names]
+    w = weights or tuple(10.0 if "rad_sec2" in r else 1.0 for r in residuals)
+
+    def f(x):
+        for prop, value in fixed.items():
+            fdm[prop] = value
+        for prop in ("ic/p-rad_sec", "ic/q-rad_sec", "ic/r-rad_sec"):
+            fdm[prop] = 0.0
+        for prop, value in zip(names, x):
+            fdm[prop] = value
+        fdm.run_ic()
+        return [fdm[r] * wi for r, wi in zip(residuals, w)]
+
+    sol = least_squares(f, x0, bounds=(lo, hi), xtol=1e-12, ftol=1e-12)
+    f(sol.x)  # leave the fdm at the solution
+    out = dict(zip(names, map(float, sol.x)))
+    out["cost"] = float(2 * sol.cost)
+    if out["cost"] > 1e-6:
+        raise TrimError(f"custom trim did not converge (cost {out['cost']:.3g}); "
+                        "check bounds/initial guess or whether the point is achievable")
+    return out

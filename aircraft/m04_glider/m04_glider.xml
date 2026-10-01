@@ -37,6 +37,12 @@
     <ixz unit="KG*M2"> 0.00 </ixz>
     <emptywt unit="KG"> 5.0 </emptywt>
     <location name="CG" unit="M"> <x> 0.40 </x> <y> 0 </y> <z> 0 </z> </location>
+    <!-- Movable ballast for CG sweeps (Module 05).  Weight and x location are
+         properties: inertia/pointmass-weight-lbs, inertia/pointmass-location-X-inches -->
+    <pointmass name="BALLAST">
+      <weight unit="KG"> 0.0 </weight>
+      <location unit="M"> <x> 0.40 </x> <y> 0 </y> <z> 0 </z> </location>
+    </pointmass>
   </mass_balance>
 
   <!-- Belly skid, tail skid and wingtips -->
