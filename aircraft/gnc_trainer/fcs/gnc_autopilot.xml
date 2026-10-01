@@ -1,4 +1,137 @@
 <?xml version="1.0"?>
-<!-- gnc_trainer autopilot (filled in from Module 09 on). -->
+<!--
+  gnc_trainer autopilot - reference solution, built up over Modules 09-12.
+
+  Inputs : fb/... feedback signals from Systems/gnc_sensors.xml (truth or sensed)
+  Outputs: ap/elevator-cmd-norm, ap/aileron-cmd-norm, ap/rudder-cmd-norm,
+           ap/throttle-cmd-norm - INCREMENTS added to the trimmed pilot/trim
+           commands by the airframe's <flight_control>.
+
+  Engage with gnclab.autopilot (bumpless: captures the current state as the
+  reference).  All loops default to OFF, so trim and linearization see the bare
+  airframe.  Gains were designed in modules/09_longitudinal_autopilot/solutions/
+  design_longitudinal.py at 25 m/s.
+-->
 <system name="gnc_autopilot">
+
+  <!-- ===================== LONGITUDINAL (Module 09) ===================== -->
+  <property value="0">     ap/pitch-hold-on </property>    <!-- inner loop: theta -> elevator -->
+  <property value="0">     ap/alt-hold-on </property>      <!-- outer loop: altitude -> theta_c -->
+  <property value="0">     ap/speed-hold-on </property>    <!-- airspeed -> throttle -->
+  <property value="0">     ap/theta-trim-rad </property>   <!-- theta at engagement (bias) -->
+  <property value="0">     ap/theta-cmd-ext-rad </property><!-- manual theta increment when alt hold is off -->
+  <property value="330">   ap/alt-cmd-ft </property>
+  <property value="82.02"> ap/vt-cmd-fps </property>
+  <property value="0.2618"> ap/theta-max-rad </property>   <!-- +/- 15 deg about trim -->
+  <property value="60">    ap/alt-zone-ft </property>      <!-- integrate only inside this band -->
+
+  <property value="-3.81972">   ap/gains/kp-theta </property>   <!-- elevator norm per rad -->
+  <property value="-0.895563">  ap/gains/kd-theta </property>   <!-- elevator norm per rad/s -->
+  <property value="0.010291">   ap/gains/kp-h </property>       <!-- rad per ft -->
+  <property value="0.00070766"> ap/gains/ki-h </property>       <!-- rad per ft*s -->
+  <property value="0.01127">    ap/gains/kp-v </property>       <!-- throttle per ft/s -->
+  <property value="0.00406191"> ap/gains/ki-v </property>       <!-- throttle per ft -->
+
+  <channel name="Altitude hold">
+    <summer name="ap/alt-error-ft">
+      <input> ap/alt-cmd-ft </input>
+      <input> -fb/h-ft </input>
+    </summer>
+    <!-- Anti-windup trigger for the altitude integrator:
+           -1 (reset) when altitude hold is off, +1 (freeze) outside the capture zone
+           or when theta_c is saturated, 0 (integrate) otherwise. -->
+    <fcs_function name="ap/alt-int-trigger">
+      <function>
+        <ifthen>
+          <eq> <property> ap/alt-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <or>
+              <gt> <abs> <property> ap/alt-error-ft </property> </abs> <property> ap/alt-zone-ft </property> </gt>
+              <gt> <abs> <property> ap/theta-cmd-incr-raw </property> </abs> <property> ap/theta-max-rad </property> </gt>
+            </or>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/alt-pi">
+      <input> ap/alt-error-ft </input>
+      <kp> ap/gains/kp-h </kp>
+      <ki type="trap"> ap/gains/ki-h </ki>
+      <trigger> ap/alt-int-trigger </trigger>
+    </pid>
+    <switch name="ap/theta-cmd-incr-raw">          <!-- theta command relative to trim -->
+      <default value="ap/theta-cmd-ext-rad"/>
+      <test value="ap/alt-pi"> ap/alt-hold-on == 1 </test>
+    </switch>
+    <fcs_function name="ap/theta-cmd-rad">         <!-- theta_trim + clip(increment) -->
+      <function>
+        <sum>
+          <property> ap/theta-trim-rad </property>
+          <max>
+            <product> <value> -1 </value> <property> ap/theta-max-rad </property> </product>
+            <min> <property> ap/theta-cmd-incr-raw </property> <property> ap/theta-max-rad </property> </min>
+          </max>
+        </sum>
+      </function>
+    </fcs_function>
+  </channel>
+
+  <channel name="Pitch hold">
+    <summer name="ap/theta-error-rad">
+      <input> ap/theta-cmd-rad </input>
+      <input> -fb/theta-rad </input>
+    </summer>
+    <pure_gain name="ap/de-p">  <input> ap/theta-error-rad </input> <gain> ap/gains/kp-theta </gain> </pure_gain>
+    <pure_gain name="ap/de-d">  <input> fb/q-rad_sec </input>        <gain> ap/gains/kd-theta </gain> </pure_gain>
+    <summer name="ap/de-cmd">   <!-- de = kp (th_c - th) - kd q  (gains are negative for this airframe) -->
+      <input> ap/de-p </input>
+      <input> -ap/de-d </input>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </summer>
+    <switch name="ap/elevator-out">
+      <default value="0"/>
+      <test value="ap/de-cmd"> ap/pitch-hold-on == 1 </test>
+      <output> ap/elevator-cmd-norm </output>
+    </switch>
+  </channel>
+
+  <channel name="Airspeed hold">
+    <summer name="ap/vt-error-fps">
+      <input> ap/vt-cmd-fps </input>
+      <input> -fb/vt-fps </input>
+    </summer>
+    <!-- freeze the integrator when the TOTAL throttle (trim + autopilot) saturates -->
+    <fcs_function name="ap/speed-int-trigger">
+      <function>
+        <ifthen>
+          <eq> <property> ap/speed-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <or>
+              <gt> <sum> <property> fcs/throttle-pos-norm </property> <property> ap/speed-pi </property> </sum> <value> 1 </value> </gt>
+              <lt> <sum> <property> fcs/throttle-pos-norm </property> <property> ap/speed-pi </property> </sum> <value> 0 </value> </lt>
+            </or>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/speed-pi">
+      <input> ap/vt-error-fps </input>
+      <kp> ap/gains/kp-v </kp>
+      <ki type="trap"> ap/gains/ki-v </ki>
+      <trigger> ap/speed-int-trigger </trigger>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </pid>
+    <switch name="ap/throttle-out">
+      <default value="0"/>
+      <test value="ap/speed-pi"> ap/speed-hold-on == 1 </test>
+      <output> ap/throttle-cmd-norm </output>
+    </switch>
+  </channel>
+
 </system>
