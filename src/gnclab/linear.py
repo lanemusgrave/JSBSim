@@ -111,3 +111,77 @@ def modes(A: np.ndarray, x_names: Sequence[str] | None = None,
         })
     df = pd.DataFrame(rows)
     return df.sort_values("wn", ascending=False).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Finite-difference linearization (works for any vehicle, including gliders)
+# ---------------------------------------------------------------------------
+FD_STATES = ("Vt", "Alpha", "Theta", "Q", "Beta", "Phi", "P", "R")
+_IC = {"Vt": "ic/vt-fps", "Alpha": "ic/alpha-rad", "Theta": "ic/theta-rad", "Q": "ic/q-rad_sec",
+       "Beta": "ic/beta-rad", "Phi": "ic/phi-rad", "P": "ic/p-rad_sec", "R": "ic/r-rad_sec"}
+
+
+def _state_derivative(fdm) -> np.ndarray:
+    """xdot for FD_STATES, from the accelerations JSBSim computes in run_ic()."""
+    u, v, w = fdm["velocities/u-aero-fps"], fdm["velocities/v-aero-fps"], fdm["velocities/w-aero-fps"]
+    ud, vd, wd = (fdm["accelerations/udot-ft_sec2"], fdm["accelerations/vdot-ft_sec2"],
+                  fdm["accelerations/wdot-ft_sec2"])
+    V = np.sqrt(u * u + v * v + w * w)
+    Vd = (u * ud + v * vd + w * wd) / V
+    alpha_d = (u * wd - w * ud) / (u * u + w * w)
+    beta_d = (V * vd - v * Vd) / (V * np.sqrt(u * u + w * w))
+    return np.array([Vd, alpha_d, fdm["velocities/thetadot-rad_sec"], fdm["accelerations/qdot-rad_sec2"],
+                     beta_d, fdm["velocities/phidot-rad_sec"], fdm["accelerations/pdot-rad_sec2"],
+                     fdm["accelerations/rdot-rad_sec2"]])
+
+
+def linearize_fd(fdm: jsbsim.FGFDMExec, inputs: Sequence[str],
+                 x_steps: Sequence[float] = (0.5, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3),
+                 u_step: float = 1e-3) -> LinearModel:
+    """Central-difference linearization about the CURRENT (trimmed) state.
+
+    States: ``Vt [ft/s], Alpha, Theta [rad], Q [rad/s], Beta, Phi [rad], P, R [rad/s]``.
+    ``inputs`` are property names written before ``run_ic()``, e.g.
+    ``["fcs/elevator-cmd-norm", "fcs/aileron-cmd-norm", "fcs/rudder-cmd-norm"]``.
+
+    Each perturbation re-initializes the model with ``run_ic()`` (one pass of
+    every model, no integration) and reads the accelerations.  Assumption: the
+    FCS is *static* between command and surface (gains, sums, limits).  An
+    actuator with a lag will not respond within one pass - perturb its output
+    property instead, or use ``jsbsim.FGLinearization`` (needs an engine).
+
+    The model is left re-initialized at the original trim point.
+    """
+    # read the *current* state (not possibly stale ic/ values)
+    x0 = {"Vt": fdm["velocities/vt-fps"], "Alpha": fdm["aero/alpha-rad"], "Theta": fdm["attitude/theta-rad"],
+          "Q": fdm["velocities/q-rad_sec"], "Beta": fdm["aero/beta-rad"], "Phi": fdm["attitude/phi-rad"],
+          "P": fdm["velocities/p-rad_sec"], "R": fdm["velocities/r-rad_sec"]}
+    u0 = {p: fdm[p] for p in inputs}
+    keep = {k: fdm[k] for k in ("ic/h-sl-ft", "ic/psi-true-rad", "ic/lat-geod-rad", "ic/long-gc-rad")}
+
+    def f(x: dict, u: dict) -> np.ndarray:
+        for k, val in keep.items():
+            fdm[k] = val
+        for s in FD_STATES:
+            fdm[_IC[s]] = x[s]
+        for p, val in u.items():
+            fdm[p] = val
+        fdm.run_ic()
+        return _state_derivative(fdm)
+
+    n, m = len(FD_STATES), len(inputs)
+    A, B = np.zeros((n, n)), np.zeros((n, m))
+    for j, s in enumerate(FD_STATES):
+        h = x_steps[j]
+        xp, xm = dict(x0), dict(x0)
+        xp[s] += h
+        xm[s] -= h
+        A[:, j] = (f(xp, u0) - f(xm, u0)) / (2 * h)
+    for j, p in enumerate(inputs):
+        up, um = dict(u0), dict(u0)
+        up[p] += u_step
+        um[p] -= u_step
+        B[:, j] = (f(x0, up) - f(x0, um)) / (2 * u_step)
+    f(x0, u0)  # restore
+    return LinearModel(A, B, np.eye(n), np.zeros((n, m)), FD_STATES, tuple(inputs), FD_STATES,
+                       ("ft/s", "rad", "rad", "rad/s", "rad", "rad", "rad/s", "rad/s"), tuple("norm" for _ in inputs))

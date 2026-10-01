@@ -43,9 +43,47 @@ LATERAL = {
 }
 
 
+# Harmless JSBSim messages we hide (each is explained in the module READMEs).
+_NOISE = (
+    "unable to open the file",       # aircraft <output> re-opened by a 2nd run_ic()
+    "Output to this file is disabled",
+)
+
+
+class _FilteringLogger(jsbsim.DefaultLogger):
+    """Buffers each JSBSim log message and drops the known-harmless ones."""
+
+    def __init__(self):
+        super().__init__(jsbsim.LogLevel.INFO)
+        self._buf: list[str] = []
+
+    def set_level(self, level):
+        super().set_level(level)
+        self.log_level = level
+
+    def message(self, message: str) -> None:
+        self._buf.append(message)
+
+    def flush(self) -> None:
+        text = "".join(self._buf)
+        self._buf.clear()
+        if not text or any(n in text for n in _NOISE):
+            return
+        if int(getattr(self, "log_level", jsbsim.LogLevel.INFO)) >= int(self.min_level):
+            print(text, end="")
+
+
+_logger_installed = False
+
+
 def quiet_jsbsim() -> None:
-    """Silence JSBSim's console chatter (banner, model reports)."""
+    """Silence JSBSim's console chatter (banner, model reports) and hide the
+    known-harmless messages listed in ``_NOISE``.  Warnings and errors still show."""
+    global _logger_installed
     jsbsim.FGJSBBase().debug_lvl = 0
+    if not _logger_installed:
+        jsbsim.set_logger(_FilteringLogger())
+        _logger_installed = True
 
 
 def make_fdm(
