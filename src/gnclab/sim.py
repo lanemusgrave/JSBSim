@@ -115,9 +115,9 @@ def make_fdm(
     fdm.set_output_path(str(OUTPUT_DIR))
     if (AIRCRAFT_DIR / aircraft).is_dir():
         fdm.set_aircraft_path(str(AIRCRAFT_DIR))
-        fdm.set_systems_path(str(Path(systems_dir) if systems_dir else AIRCRAFT_DIR / aircraft / "fcs"))
+        fdm.set_systems_path(str(Path(systems_dir).resolve() if systems_dir else AIRCRAFT_DIR / aircraft / "fcs"))
     elif systems_dir:
-        fdm.set_systems_path(str(systems_dir))
+        fdm.set_systems_path(str(Path(systems_dir).resolve()))
     if not fdm.load_model(aircraft):
         raise RuntimeError(f"JSBSim could not load aircraft '{aircraft}'")
     if not output:

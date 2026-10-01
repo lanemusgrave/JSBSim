@@ -184,6 +184,7 @@ def surface_channel(name: str, cmd: str, trim: str, out: str, limit: float) -> s
       <summer name="fcs/{out}-sum">
         <input> {cmd} </input>
         <input> {trim} </input>
+        <input> ap/{out}-cmd-norm </input>
         <clipto> <min> -1 </min> <max> 1 </max> </clipto>
       </summer>
       <aerosurface_scale name="fcs/{out}-cmd-rad">
@@ -293,8 +294,6 @@ def build_aircraft() -> str:
     </tank>
   </propulsion>
 
-{build_motor_prop_system()}
-
   <!-- Thrust along the shaft and the motor reaction torque on the airframe. -->
   <external_reactions>
     <force name="propeller" frame="BODY">
@@ -308,19 +307,35 @@ def build_aircraft() -> str:
     </moment>
   </external_reactions>
 
+  <!-- ===== Avionics, executed in this order every frame =====
+       (JSBSim runs ALL <system>s, in file order, before <flight_control>.)
+       1. Systems/gnc_sensors.xml : sensor models; publishes fb/... feedback signals
+       2. fcs/gnc_autopilot.xml   : autopilot + guidance; publishes ap/...-cmd-norm
+       3. motor-prop system        : throttle sum + propulsion
+       4. <flight_control>         : pilot + trim + autopilot commands -> actuators -> surfaces
+       gnclab points JSBSim's systems path at aircraft/gnc_trainer/fcs/; pass
+       make_fdm(..., systems_dir=...) to fly your own gnc_autopilot.xml instead. -->
+  <system name="interfaces">
+    <!-- Interface properties shared by the files below, declared once here. -->
+    <property value="0"> fcs/actuators-on </property>
+    <property value="0"> ap/elevator-cmd-norm </property>
+    <property value="0"> ap/aileron-cmd-norm </property>
+    <property value="0"> ap/rudder-cmd-norm </property>
+    <property value="0"> ap/throttle-cmd-norm </property>
+  </system>
+  <system file="gnc_sensors"/>
+  <system file="gnc_autopilot"/>
+
+{build_motor_prop_system()}
+
   <flight_control name="gnc_trainer FCS">
     <!-- Normalized commands (-1..1, throttle 0..1) -> surface angles [rad].
-         Trim inputs are summed in so JSBSim's trim routine can use them. -->
-    <property value="0"> fcs/actuators-on </property>
+         Pilot, trim and autopilot (ap/...) commands are summed.  Trim inputs
+         must be included so JSBSim's trim routine can use them. -->
 {surface_channel("Pitch", "fcs/elevator-cmd-norm", "fcs/pitch-trim-cmd-norm", "elevator", P["de_max"])}
 {surface_channel("Roll", "fcs/aileron-cmd-norm", "fcs/roll-trim-cmd-norm", "aileron", P["da_max"])}
 {surface_channel("Yaw", "fcs/rudder-cmd-norm", "fcs/yaw-trim-cmd-norm", "rudder", P["dr_max"])}
   </flight_control>
-
-  <!-- Autopilot / guidance live in fcs/gnc_autopilot.xml (Modules 09-12).
-       gnclab points JSBSim's systems path at aircraft/gnc_trainer/fcs/, and you
-       can point it at your own folder to fly your own autopilot. -->
-  <system file="gnc_autopilot"/>
 
 {build_aero()}
 
@@ -356,6 +371,12 @@ def build_motor_prop_system() -> str:
     return f"""  <!-- ===== Motor + propeller (Beard & McLain propulsion addendum) ===== -->
   <system name="motor-prop">
     <channel name="Propulsion">
+      <!-- pilot/trim throttle (fcs/throttle-pos-norm) + autopilot throttle -->
+      <summer name="fcs/throttle-total-norm">
+        <input> fcs/throttle-pos-norm </input>
+        <input> ap/throttle-cmd-norm </input>
+        <clipto> <min> 0 </min> <max> 1 </max> </clipto>
+      </summer>
       <fcs_function name="propulsion/rho-kgm3">
         <function> <product> <property> atmosphere/rho-slugs_ft3 </property> <value> 515.379 </value> </product> </function>
       </fcs_function>
@@ -374,7 +395,7 @@ def build_motor_prop_system() -> str:
           <sum>
             <product> <property> propulsion/rho-kgm3 </property> <property> propulsion/Va-mps </property>
                       <property> propulsion/Va-mps </property> <value> {c2_k:.8g} </value> </product>
-            <product> <property> fcs/throttle-pos-norm </property> <value> {-cV_k:.8g} </value> </product>
+            <product> <property> fcs/throttle-total-norm </property> <value> {-cV_k:.8g} </value> </product>
             <value> {c0:.8g} </value>
           </sum>
         </function>
@@ -431,7 +452,7 @@ def build_motor_prop_system() -> str:
         <function>
           <quotient>
             <difference>
-              <product> <property> fcs/throttle-pos-norm </property> <value> {P['V_max']} </value> </product>
+              <product> <property> fcs/throttle-total-norm </property> <value> {P['V_max']} </value> </product>
               <product> <property> propulsion/omega-rad_sec </property> <value> {KV:.8g} </value> </product>
             </difference>
             <value> {P['R_motor']} </value>

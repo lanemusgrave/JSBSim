@@ -82,9 +82,47 @@
     </tank>
   </propulsion>
 
+  <!-- Thrust along the shaft and the motor reaction torque on the airframe. -->
+  <external_reactions>
+    <force name="propeller" frame="BODY">
+      <function> <product> <property> propulsion/thrust-N </property> <value> 0.224809 </value> </product> </function>
+      <location unit="M"> <x> 0.0 </x> <y> 0 </y> <z> 0 </z> </location>
+      <direction> <x> 1 </x> <y> 0 </y> <z> 0 </z> </direction>
+    </force>
+    <moment name="prop_torque" frame="BODY">
+      <function> <product> <property> propulsion/torque-Nm </property> <value> 0.737562 </value> </product> </function>
+      <direction> <x> -1 </x> <y> 0 </y> <z> 0 </z> </direction>
+    </moment>
+  </external_reactions>
+
+  <!-- ===== Avionics, executed in this order every frame =====
+       (JSBSim runs ALL <system>s, in file order, before <flight_control>.)
+       1. Systems/gnc_sensors.xml : sensor models; publishes fb/... feedback signals
+       2. fcs/gnc_autopilot.xml   : autopilot + guidance; publishes ap/...-cmd-norm
+       3. motor-prop system        : throttle sum + propulsion
+       4. <flight_control>         : pilot + trim + autopilot commands -> actuators -> surfaces
+       gnclab points JSBSim's systems path at aircraft/gnc_trainer/fcs/; pass
+       make_fdm(..., systems_dir=...) to fly your own gnc_autopilot.xml instead. -->
+  <system name="interfaces">
+    <!-- Interface properties shared by the files below, declared once here. -->
+    <property value="0"> fcs/actuators-on </property>
+    <property value="0"> ap/elevator-cmd-norm </property>
+    <property value="0"> ap/aileron-cmd-norm </property>
+    <property value="0"> ap/rudder-cmd-norm </property>
+    <property value="0"> ap/throttle-cmd-norm </property>
+  </system>
+  <system file="gnc_sensors"/>
+  <system file="gnc_autopilot"/>
+
   <!-- ===== Motor + propeller (Beard & McLain propulsion addendum) ===== -->
   <system name="motor-prop">
     <channel name="Propulsion">
+      <!-- pilot/trim throttle (fcs/throttle-pos-norm) + autopilot throttle -->
+      <summer name="fcs/throttle-total-norm">
+        <input> fcs/throttle-pos-norm </input>
+        <input> ap/throttle-cmd-norm </input>
+        <clipto> <min> 0 </min> <max> 1 </max> </clipto>
+      </summer>
       <fcs_function name="propulsion/rho-kgm3">
         <function> <product> <property> atmosphere/rho-slugs_ft3 </property> <value> 515.379 </value> </product> </function>
       </fcs_function>
@@ -103,7 +141,7 @@
           <sum>
             <product> <property> propulsion/rho-kgm3 </property> <property> propulsion/Va-mps </property>
                       <property> propulsion/Va-mps </property> <value> -0.002181446 </value> </product>
-            <product> <property> fcs/throttle-pos-norm </property> <value> -69.620487 </value> </product>
+            <product> <property> fcs/throttle-total-norm </property> <value> -69.620487 </value> </product>
             <value> 0.098785827 </value>
           </sum>
         </function>
@@ -160,7 +198,7 @@
         <function>
           <quotient>
             <difference>
-              <product> <property> fcs/throttle-pos-norm </property> <value> 44.4 </value> </product>
+              <product> <property> fcs/throttle-total-norm </property> <value> 44.4 </value> </product>
               <product> <property> propulsion/omega-rad_sec </property> <value> 0.065857218 </value> </product>
             </difference>
             <value> 0.042 </value>
@@ -170,27 +208,15 @@
     </channel>
   </system>
 
-  <!-- Thrust along the shaft and the motor reaction torque on the airframe. -->
-  <external_reactions>
-    <force name="propeller" frame="BODY">
-      <function> <product> <property> propulsion/thrust-N </property> <value> 0.224809 </value> </product> </function>
-      <location unit="M"> <x> 0.0 </x> <y> 0 </y> <z> 0 </z> </location>
-      <direction> <x> 1 </x> <y> 0 </y> <z> 0 </z> </direction>
-    </force>
-    <moment name="prop_torque" frame="BODY">
-      <function> <product> <property> propulsion/torque-Nm </property> <value> 0.737562 </value> </product> </function>
-      <direction> <x> -1 </x> <y> 0 </y> <z> 0 </z> </direction>
-    </moment>
-  </external_reactions>
-
   <flight_control name="gnc_trainer FCS">
     <!-- Normalized commands (-1..1, throttle 0..1) -> surface angles [rad].
-         Trim inputs are summed in so JSBSim's trim routine can use them. -->
-    <property value="0"> fcs/actuators-on </property>
+         Pilot, trim and autopilot (ap/...) commands are summed.  Trim inputs
+         must be included so JSBSim's trim routine can use them. -->
     <channel name="Pitch">
       <summer name="fcs/elevator-sum">
         <input> fcs/elevator-cmd-norm </input>
         <input> fcs/pitch-trim-cmd-norm </input>
+        <input> ap/elevator-cmd-norm </input>
         <clipto> <min> -1 </min> <max> 1 </max> </clipto>
       </summer>
       <aerosurface_scale name="fcs/elevator-cmd-rad">
@@ -216,6 +242,7 @@
       <summer name="fcs/aileron-sum">
         <input> fcs/aileron-cmd-norm </input>
         <input> fcs/roll-trim-cmd-norm </input>
+        <input> ap/aileron-cmd-norm </input>
         <clipto> <min> -1 </min> <max> 1 </max> </clipto>
       </summer>
       <aerosurface_scale name="fcs/aileron-cmd-rad">
@@ -241,6 +268,7 @@
       <summer name="fcs/rudder-sum">
         <input> fcs/rudder-cmd-norm </input>
         <input> fcs/yaw-trim-cmd-norm </input>
+        <input> ap/rudder-cmd-norm </input>
         <clipto> <min> -1 </min> <max> 1 </max> </clipto>
       </summer>
       <aerosurface_scale name="fcs/rudder-cmd-rad">
@@ -263,11 +291,6 @@
       </switch>
     </channel>
   </flight_control>
-
-  <!-- Autopilot / guidance live in fcs/gnc_autopilot.xml (Modules 09-12).
-       gnclab points JSBSim's systems path at aircraft/gnc_trainer/fcs/, and you
-       can point it at your own folder to fly your own autopilot. -->
-  <system file="gnc_autopilot"/>
 
   <aerodynamics>
     <!-- All coefficients are referenced to the CG (AERORP = CG).  Forces in the
