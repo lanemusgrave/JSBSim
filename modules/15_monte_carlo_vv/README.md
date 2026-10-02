@@ -80,6 +80,14 @@ a window, or bound a statistic. That restating is the job, not a fudge.
 > - **Sensor and turbulence seeds:** `simulation/randomseed` seeds the sensor noise;
 >   `atmosphere/randomseed` seeds the turbulence. Set both per case, or your
 >   "300 runs" contain 300 copies of the same noise.
+> - **Seeds are not portable across platforms.** JSBSim draws noise and turbulence from
+>   `std::default_random_engine` and `std::normal_distribution`, which are
+>   implementation-defined in C++. The same seed gives the same run on one platform,
+>   but a *different* run on Windows (MSVC) than on Linux (libstdc++). CI caught it:
+>   regression case 9 (W20 = 22.6 ft/s) passed MC-3 on Linux and failed on Windows.
+>   Statistics agree across platforms; individual runs don't. Record the platform with
+>   every Monte Carlo, and don't write regression tests that depend on one lucky draw.
+>   The numbers below are from Linux.
 > - **Spawned workers re-import your script** (always on Windows, and here on
 >   every OS on purpose). Code outside `if __name__ == "__main__":` runs once
 >   per worker, and a script piped in on stdin or typed at a REPL can't be

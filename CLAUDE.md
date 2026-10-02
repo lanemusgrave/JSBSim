@@ -39,6 +39,8 @@ for source builds), is an experienced pilot, and is rusty on the engineering.
 - `forces/fb*-total-lbs` excludes gravity (= specific force × mass).
 - Turbulence needs `atmosphere/turbulence/milspec/severity` ≠ 0, even at low altitude.
 - Stock JSBSim silently drops unknown FCS components (it logs one error line).
+- Random seeds give different noise/turbulence on Windows vs Linux (implementation-defined
+  `std::default_random_engine`/`normal_distribution`). Never test on a single lucky draw.
 
 ## Checks
 
