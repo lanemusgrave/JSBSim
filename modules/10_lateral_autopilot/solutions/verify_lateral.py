@@ -21,6 +21,7 @@ import numpy as np  # noqa: E402
 
 from gnclab import initialize, make_fdm, run  # noqa: E402
 from gnclab.autopilot import engage_lateral, engage_longitudinal, realism  # noqa: E402
+from gnclab.guidance import ne_from_latlon  # noqa: E402
 from gnclab.metrics import step_metrics  # noqa: E402
 from gnclab.plotting import save, timehistory  # noqa: E402
 from gnclab.signals import doublet  # noqa: E402
@@ -28,8 +29,8 @@ from gnclab.trim import trim  # noqa: E402
 
 PROPS = {"chi_deg": "flight-path/psi-gt-rad", "phi_deg": "attitude/phi-rad", "phi_cmd_deg": "ap/phi-cmd-rad",
          "beta_deg": "aero/beta-deg", "alt_ft": "position/h-sl-ft", "da_ap": "ap/aileron-cmd-norm",
-         "dr_ap": "ap/rudder-cmd-norm", "north_ft": "position/distance-from-start-lat-mt",
-         "east_ft": "position/distance-from-start-lon-mt"}
+         "dr_ap": "ap/rudder-cmd-norm", "lat_rad": "position/lat-geod-rad",
+         "lon_rad": "position/long-gc-rad"}
 
 
 def flight(realistic, course=True, yaw_damper=True, cb=None, T=40.0):
@@ -41,6 +42,7 @@ def flight(realistic, course=True, yaw_damper=True, cb=None, T=40.0):
     engage_longitudinal(fdm)
     engage_lateral(fdm, course=course, yaw_damper=yaw_damper)
     df = run(fdm, T, PROPS, callback=cb, record_every=6)
+    df["north_m"], df["east_m"] = ne_from_latlon(df.lat_rad, df.lon_rad, fdm["ic/lat-geod-rad"], fdm["ic/long-gc-rad"])
     # course is reported in [0, 2 pi): unwrap it (and start it near 0) before measuring anything
     df["chi_deg"] = np.unwrap(df["chi_deg"].to_numpy())
     df["chi_deg"] -= 2 * np.pi * np.round(df["chi_deg"].iloc[0] / (2 * np.pi))
@@ -99,7 +101,7 @@ fig, _ = timehistory({"yaw damper ON": dr_on, "yaw damper OFF": dr_off}, ["beta_
 save(fig, "10_lateral_autopilot", "yaw_damper", show=args.show)
 fig, ax = plt.subplots(figsize=(6, 6))
 for name, df in (("90 deg change", c), ("0 -> 350 deg (wrap test)", w)):
-    ax.plot(df.east_ft, df.north_ft, label=name)
+    ax.plot(df.east_m, df.north_m, label=name)
 ax.set(xlabel="east [m]", ylabel="north [m]", title="ground tracks (start at origin, heading north)")
 ax.axis("equal")
 ax.grid(alpha=0.3)

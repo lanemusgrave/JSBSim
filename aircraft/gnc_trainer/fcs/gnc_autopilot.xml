@@ -149,6 +149,38 @@
   <property value="0.23">     ap/gains/kr-yaw </property>   <!-- rudder norm per rad/s (washed out) -->
   <property value="1">        ap/gains/washout-c1 </property>
 
+  <!-- ===================== GUIDANCE (Module 12) =====================
+       XML "direct-to" guidance with JSBSim's waypoint components (RM case study
+       "Modeling a waypoint navigation system").  When ap/guidance-on = 1 the course
+       command is the great-circle bearing to the target.  Path-following
+       guidance (vector fields, waypoint sequencing) lives in Python:
+       gnclab.guidance. -->
+  <property value="0"> ap/guidance-on </property>
+  <property value="0"> guidance/target-lat-rad </property>
+  <property value="0"> guidance/target-lon-rad </property>
+
+  <channel name="Direct-to guidance">
+    <waypoint_heading name="guidance/wp-heading-rad" unit="RAD">
+      <target_latitude unit="RAD">  guidance/target-lat-rad </target_latitude>
+      <target_longitude unit="RAD"> guidance/target-lon-rad </target_longitude>
+      <source_latitude unit="RAD">  position/lat-geod-rad </source_latitude>
+      <source_longitude unit="RAD"> position/long-gc-rad </source_longitude>
+    </waypoint_heading>
+    <waypoint_distance name="guidance/wp-distance-m" unit="M">
+      <target_latitude unit="RAD">  guidance/target-lat-rad </target_latitude>
+      <target_longitude unit="RAD"> guidance/target-lon-rad </target_longitude>
+      <source_latitude unit="RAD">  position/lat-geod-rad </source_latitude>
+      <source_longitude unit="RAD"> position/long-gc-rad </source_longitude>
+    </waypoint_distance>
+    <!-- When guidance is off, pass the course command through unchanged (a
+         switch always writes its output, so it must default to the current value). -->
+    <switch name="guidance/chi-cmd-select">
+      <default value="ap/chi-cmd-rad"/>
+      <test value="guidance/wp-heading-rad"> ap/guidance-on == 1 </test>
+      <output> ap/chi-cmd-rad </output>
+    </switch>
+  </channel>
+
   <channel name="Course hold">
     <!-- wrap the course error to [-pi, pi]: atan2(sin e, cos e) -->
     <fcs_function name="ap/chi-error-rad">
