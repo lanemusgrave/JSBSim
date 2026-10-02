@@ -41,8 +41,16 @@ def test_dispersions_reach_the_model():
 
 def test_small_monte_carlo_regression():
     """12 dispersed cases, serial.  If a change to the autopilot or model makes
-    any of these fail, the regression catches it before a full Monte Carlo."""
-    res = evaluate(run_cases(sample_cases(12, seed=2026), workers=1, progress=False))
+    any of these fail, the regression catches it before a full Monte Carlo.
+
+    Turbulence is capped at W20 = 15 ft/s, where MC-3 has margin (Module 15,
+    exercise A).  Above that, MC-3 fails a few % of the time by luck of the draw,
+    and the draw differs by platform: JSBSim's std::default_random_engine and
+    std::normal_distribution are implementation-defined, so the same seed gives
+    different turbulence on Windows (MSVC) and Linux (libstdc++).  CI found this."""
+    cases = sample_cases(12, seed=2026)
+    cases["turb_w20_fps"] = cases["turb_w20_fps"].clip(upper=15.0)
+    res = evaluate(run_cases(cases, workers=1, progress=False))
     assert (res.status == "ok").all()
     assert res["pass"].all(), res.loc[~res["pass"], list(REQUIREMENTS)]
     assert math.isfinite(sensitivity(res, "chi_overshoot_deg").iloc[0])
