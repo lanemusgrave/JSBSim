@@ -306,6 +306,7 @@ def sensitivity(df: pd.DataFrame, metric: str, params: list[str] | None = None) 
     sorted by magnitude: the top entries are what drives that metric."""
     params = [c for c in df.columns if c in DEFAULT_DISPERSIONS] if params is None else params
     ok = df[df["status"] == "ok"]
+    params = [p for p in params if ok[p].nunique() > 1]       # a fixed parameter can't drive anything
     r = ok[params].corrwith(ok[metric], method="spearman")
     return r.reindex(r.abs().sort_values(ascending=False).index)
 

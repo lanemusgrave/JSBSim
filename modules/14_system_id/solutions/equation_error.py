@@ -30,44 +30,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 from flight_test import ensure_logs  # noqa: E402
 
 ensure_logs()
-from gnclab.sysid import ols, smooth, smooth_derivative, theil  # noqa: E402
+from gnclab.sysid import EQUATION_ERROR_MODELS, measured_coefficients, ols, theil  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "07_build_uas_model" / "solutions"))
 from build_gnc_trainer import P  # noqa: E402
 
 LOGS = OUTPUT_DIR / "14_system_id"
-PSF = 47.880259
-S, b, c, m = P["S"], P["b"], P["c"], P["mass"]
-Jx, Jy, Jz, Jxz = P["Jx"], P["Jy"], P["Jz"], P["Jxz"]
 
 
 def prep(name):
-    d = pd.read_csv(LOGS / f"{name}.csv", index_col="t")
-    dt = d.index[1] - d.index[0]
-    for col in ("alpha", "beta", "p", "q", "r", "V", "ax", "ay", "az", "de", "da", "dr"):
-        d[col + "_s"] = smooth(d[col], dt)
-    for col in ("p", "q", "r"):
-        d[col + "dot"] = smooth_derivative(d[col], dt)
-    qS = d.qbar_psf.to_numpy() * PSF * S
-    d["Cm"] = Jy * d.qdot / (qS * c)
-    d["CL"] = -m * d.az_s * np.cos(d.alpha_s) / qS          # thrust is along x, so az has no thrust term
-    d["CY"] = m * d.ay_s / qS
-    d["Cl"] = (Jx * d.pdot - Jxz * d.rdot) / (qS * b)
-    d["Cn"] = (Jz * d.rdot - Jxz * d.pdot) / (qS * b)
-    d["qn"] = c / (2 * d.V_s) * d.q_s
-    d["pn"] = b / (2 * d.V_s) * d.p_s
-    d["rn"] = b / (2 * d.V_s) * d.r_s
-    d["one"] = 1.0
-    return d.iloc[25:-25]                                    # drop filter edge effects
+    return measured_coefficients(pd.read_csv(LOGS / f"{name}.csv", index_col="t"), P)
 
 
-MODELS = {
-    "Cm": (["one", "alpha_s", "qn", "de_s"], ["Cm0", "Cma", "Cmq", "Cmde"], "long"),
-    "CL": (["one", "alpha_s", "qn", "de_s"], ["CL0", "CLa", "CLq", "CLde"], "long"),
-    "CY": (["beta_s", "da_s", "dr_s"], ["CYb", "CYda", "CYdr"], "lat"),
-    "Cl": (["one", "beta_s", "pn", "rn", "da_s", "dr_s"], ["Cl_0 (prop torque)", "Clb", "Clp", "Clr", "Clda", "Cldr"], "lat"),
-    "Cn": (["one", "beta_s", "pn", "rn", "da_s", "dr_s"], ["Cn_0", "Cnb", "Cnp", "Cnr", "Cnda", "Cndr"], "lat"),
-}
+MODELS = EQUATION_ERROR_MODELS
 fit = {"long": prep("long_3211"), "lat": prep("lat_3211")}
 val = {"long": prep("long_doublet"), "lat": prep("lat_doublet")}
 

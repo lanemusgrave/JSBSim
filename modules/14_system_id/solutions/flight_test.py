@@ -42,8 +42,12 @@ PROPS = {"alpha": "aero/alpha-rad", "beta": "aero/beta-rad", "p": "velocities/p-
          "de": "fcs/elevator-pos-rad", "da": "fcs/aileron-pos-rad", "dr": "fcs/rudder-pos-rad"}
 
 
-def maneuver(name, de_sig=None, da_sig=None, dr_sig=None, T=20.0):
+def maneuver(name, de_sig=None, da_sig=None, dr_sig=None, T=20.0, props=None, module="14_system_id"):
+    """Fly one maneuver; ``props`` are written before run_ic() (the capstone uses
+    them to fly a different "as-built" airplane); the log goes to outputs/<module>/."""
     fdm = make_fdm("gnc_trainer")
+    for k, v in (props or {}).items():
+        fdm[k] = v
     initialize(fdm, {"lat-geod-deg": 33.7, "h-sl-ft": 500, "vt-fps": 25 / FT})
     trim(fdm, "full")
     fdm["fcs/actuators-on"] = 1
@@ -81,7 +85,7 @@ def maneuver(name, de_sig=None, da_sig=None, dr_sig=None, T=20.0):
     for k, s in NOISE.items():
         df[k] = df[k] + rng.normal(0, s, len(df))
     keep = ["alpha", "beta", "p", "q", "r", "phi", "theta", "V", "qbar_psf", "ax", "ay", "az", "de", "da", "dr"]
-    path = outdir("14_system_id") / f"{name}.csv"
+    path = outdir(module) / f"{name}.csv"
     df[keep].to_csv(path)
     print(f"{name:13s}: {len(df)} samples -> {path.name}")
     return df[keep]

@@ -102,7 +102,8 @@ path following : |cross-track from the leg| for north 300..750 m: mean  3.0 m
 
 - **A. Fillets** (B&M Algorithm 6): turn onto the next leg on a circle tangent to
   both legs. Solution: [`solutions/guidance_ex.py`](solutions/guidance_ex.py)
-  (max path deviation 124 m → 26 m).
+  (max path deviation 124 m → 26 m). The `FilletManager` class itself lives in
+  `gnclab/guidance.py`, because the capstone flies it. Write yours before you read it.
 - **B. Tuning:** sweep k<sub>path</sub> and χ<sub>∞</sub>. What breaks when k<sub>path</sub> is too large,
   and how does that relate to Module 10's course-loop bandwidth?
 - **C. (Advanced) TECS:** total-energy control for pitch and throttle. No

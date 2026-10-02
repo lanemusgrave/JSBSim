@@ -122,3 +122,58 @@ class WaypointManager:
         self.log["leg"].append(self.i if self.mode == "line" else -1)
         self.log["xtrack_m"].append(err)
         self.log["chi_c"].append(chi_c)
+
+
+class FilletManager(WaypointManager):
+    """Straight legs joined by orbit segments of radius R (B&M Algorithm 6).
+
+    Module 12 exercise A builds this; the capstone (Module 18) flies it.
+    """
+
+    R: float = 120.0
+
+    def _geom(self, i):
+        w = [np.array(x[:2], float) for x in self.waypoints]
+        q0 = (w[i] - w[i - 1]) / np.linalg.norm(w[i] - w[i - 1])
+        q1 = (w[i + 1] - w[i]) / np.linalg.norm(w[i + 1] - w[i])
+        rho = math.acos(np.clip(-q0 @ q1, -1, 1))
+        z1 = w[i] - self.R / math.tan(rho / 2) * q0
+        z2 = w[i] + self.R / math.tan(rho / 2) * q1
+        c = w[i] - self.R / math.sin(rho / 2) * (q0 - q1) / np.linalg.norm(q0 - q1)
+        lam = 1 if q0[0] * q1[1] - q0[1] * q1[0] > 0 else -1
+        return w, q0, q1, z1, z2, c, lam
+
+    def __call__(self, fdm, t):
+        if t + 1e-9 < self._t_next:
+            return
+        self._t_next += 1.0 / self.rate_hz
+        p = ne_position(fdm)
+        chi = fdm["flight-path/psi-gt-rad"]
+        last = self.i + 1 >= len(self.waypoints)
+        if last:   # final leg: plain line to the last waypoint, then loiter
+            w = [np.array(x[:2], float) for x in self.waypoints]
+            q = (w[-1] - w[-2]) / np.linalg.norm(w[-1] - w[-2])
+            if self.mode != "orbit" and np.dot(p - w[-1], q) < 0:
+                chi_c, err = line_course(p, chi, w[-2], q, self.chi_inf, self.k_path)
+            else:
+                self.mode = "orbit"
+                chi_c, err = orbit_course(p, chi, w[-1], self.loiter_radius_m, 1, self.k_orbit)
+        else:
+            w, q0, q1, z1, z2, c, lam = self._geom(self.i)
+            if self.mode == "line":
+                if np.dot(p - z1, q0) >= 0:
+                    self.mode = "fillet"
+                chi_c, err = line_course(p, chi, w[self.i - 1], q0, self.chi_inf, self.k_path)
+            if self.mode == "fillet":
+                if np.dot(p - z2, q1) >= 0:
+                    self.mode = "line"
+                    self.i += 1
+                    chi_c, err = line_course(p, chi, w[self.i - 1], q1, self.chi_inf, self.k_path)
+                else:
+                    chi_c, err = orbit_course(p, chi, c, self.R, lam, self.k_orbit)
+        fdm["ap/chi-cmd-rad"] = chi_c
+        fdm["ap/alt-cmd-ft"] = self.waypoints[min(self.i, len(self.waypoints) - 1)][2]
+        self.log["t"].append(t)
+        self.log["leg"].append(-1 if self.mode == "orbit" else self.i)
+        self.log["xtrack_m"].append(err)
+        self.log["chi_c"].append(chi_c)

@@ -82,13 +82,13 @@ curriculum. S&L is the book to have on your desk at work.
 |---|---|---|---|---|---|
 | ☐ | 14 | [System identification](modules/14_system_id/README.md) | M&K ch. 5–6, 9–10 | design doublet, 3-2-1-1 and sweep maneuvers; fly a noisy simulated flight test; estimate derivatives by equation error (OLS) and output error; build frequency responses with coherence; validate on held-out data | 7 |
 | ☐ | 15 | [V&V: Monte Carlo and requirements testing](modules/15_monte_carlo_vv/README.md) | NASA-STD-7009A (overview) | write requirements; disperse mass, CG, aero, wind/turbulence, sensors and delay; run batches in parallel (Windows-safe); compute pass/fail statistics; add pytest regression tests; write a flight-readiness summary | 6 |
-| ☐ | 16 | [SIL harness and flight-test log analysis](modules/16_sil_and_log_analysis/README.md) | RM *Programmer's Manual* (I/O) | run JSBSim as a plant at a fixed rate with an external controller process over UDP plus added latency; write test cards; build a log-analysis toolkit (align, segment, metrics); run a tuning iteration | 6 |
+| ☐ | 16 | [SIL harness and flight-test log analysis](modules/16_sil_log_analysis/README.md) | RM *Programmer's Manual* (I/O) | run JSBSim as a plant at a fixed rate with an external controller process over UDP plus added latency; write test cards; build a log-analysis toolkit (align, segment, metrics); run a tuning iteration | 6 |
 
 ## Phase 6 — Working in the fork (week 8)
 
 | ✓ | # | Module | Reading | You will… | h |
 |---|---|---|---|---|---|
-| ☐ | 17 | [Working in a JSBSim fork (C++)](modules/17_working_in_the_fork/README.md) | RM *Programmer's Manual*; `src/` tour | build from source (WSL2 or VS 2022); tour `FGFDMExec`, `FGPropagate`, `FGFCS`, `FGFCSComponent`; add a new FCS component in C++; run it from a script; keep a fork in sync with upstream | 8 |
+| ☐ | 17 | [Working in a JSBSim fork (C++)](modules/17_jsbsim_fork/README.md) | RM *Programmer's Manual*; `src/` tour | build from source (WSL2 or VS 2022); tour `FGFDMExec`, `FGPropagate`, `FGFCS`, `FGFCSComponent`; add a new FCS component in C++; run it from a script; keep a fork in sync with upstream | 8 |
 
 ## Capstone (weeks 8–9)
 
