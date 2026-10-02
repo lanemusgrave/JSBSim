@@ -1,0 +1,54 @@
+# Runs the same setup a learner runs (setup.ps1 on Windows, setup.sh on Linux),
+# then every test: helper unit tests, numerical checks, and every module solution
+# in --fast mode.  Windows is the primary platform for this curriculum, so it is
+# tested on every push rather than assumed.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      MPLBACKEND: Agg
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup (Windows, as in the README)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+
+      - name: Setup (Linux)
+        if: runner.os != 'Windows'
+        run: PYTHON=python bash scripts/setup.sh
+
+      - name: Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m pytest -q -ra
+
+      - name: Tests (Linux)
+        if: runner.os != 'Windows'
+        run: .venv/bin/python -m pytest -q -ra
+
+      - name: Upload outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs-${{ matrix.os }}
+          path: outputs/
+          if-no-files-found: ignore

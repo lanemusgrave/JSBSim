@@ -81,7 +81,7 @@ curriculum. S&L is the book to have on your desk at work.
 | ✓ | # | Module | Reading | You will… | h |
 |---|---|---|---|---|---|
 | ☐ | 14 | [System identification](modules/14_system_id/README.md) | M&K ch. 5–6, 9–10 | design doublet, 3-2-1-1 and sweep maneuvers; fly a noisy simulated flight test; estimate derivatives by equation error (OLS) and output error; build frequency responses with coherence; validate on held-out data | 7 |
-| ☐ | 15 | [V&V: Monte Carlo and requirements testing](modules/15_monte_carlo_vv/README.md) | NASA-STD-7009A (overview) | write requirements; disperse mass, CG, aero, wind/turbulence, sensors and delay; run batches in parallel (Windows-safe); compute pass/fail statistics; add pytest regression tests; write a flight-readiness summary | 6 |
+| ☐ | 15 | [V&V: Monte Carlo and requirements testing](modules/15_monte_carlo_vv/README.md) | NASA-STD-7009A (overview) | write requirements; disperse mass, CG, aero, thrust, wind/turbulence, actuators and sensors; run batches in parallel (Windows-safe); compute pass/fail statistics; add pytest regression tests; write a flight-readiness summary | 6 |
 | ☐ | 16 | [SIL harness and flight-test log analysis](modules/16_sil_log_analysis/README.md) | RM *Programmer's Manual* (I/O) | run JSBSim as a plant at a fixed rate with an external controller process over UDP plus added latency; write test cards; build a log-analysis toolkit (align, segment, metrics); run a tuning iteration | 6 |
 
 ## Phase 6 — Working in the fork (week 8)
@@ -110,8 +110,8 @@ curriculum. S&L is the book to have on your desk at work.
 | §2.7 Flight control and systems modeling | 08–11 |
 | §3.1 Aircraft, §3.2 Engines, §3.3 Thrusters | 04, 07 |
 | §3.4 Initialization | 01, 05 |
-| §4 Scripting (events) | 03, 16 |
-| Programmer's Manual: class hierarchy, Python, extending | 01, 16, 17 |
+| §4 Scripting (events) | 03 |
+| Programmer's Manual: class hierarchy, Python, extending | 01, 17 |
 | Formulation Manual: equations of motion | 02, 06 |
 | Case Study: Simple ball / ball with parachute | 02, 04 |
 | Case Study: Wing leveler / heading hold (C172) | 03, 10 |

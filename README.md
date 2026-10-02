@@ -31,13 +31,16 @@ Linux / macOS / WSL2: `bash scripts/setup.sh && source .venv/bin/activate`.
 
 ```text
 CURRICULUM.md        roadmap: 19 modules in 6 phases, readings, progress checklist
-docs/                setup guide (Windows-first) and source-build guide
+docs/                setup guide (Windows-first); source build, code tour and fork workflow
 modules/NN_topic/    README (lesson) + exercises/ (starter code) + solutions/ (reference)
 aircraft/            models you build: gnc_trainer (small UAS), glider, ball variants
-src/gnclab/          small helper package used by the lessons (sim, trim, linear, metrics...)
+src/gnclab/          helper package used by the lessons: sim, trim, linear, metrics, autopilot,
+                     controllers, guidance, estimation, sysid, montecarlo, sil, logs, mission
 reference/           cheat sheets: properties, equations, glossary, reading list
-scripts/             setup, install check, build JSBSim from source
+scripts/             setup, install check, build JSBSim (executable + Python module) from source
 tests/               pytest: helper unit tests + checks that every solution still runs
+.github/workflows/   CI: the Windows and Linux setup scripts + every test, on every push
+CLAUDE.md            conventions for AI-assisted sessions in this repo
 outputs/             plots and logs written by the lessons (gitignored)
 external/            JSBSim C++ source checkout for Module 17 (gitignored)
 ```
@@ -52,8 +55,11 @@ command-line program and about 60 aircraft) with Python 3.10–3.13.
 
 ```bash
 pytest -m "not slow"   # fast: helpers + numerical sanity checks (~10 s)
-pytest                 # everything, including every module solution (a few minutes)
+pytest                 # everything, including every module solution (~3-4 min)
 ```
+
+CI runs the Windows setup script (`setup.ps1`) and the full suite on `windows-latest`,
+and the same on `ubuntu-latest`, on every push.
 
 ## License and credits
 
