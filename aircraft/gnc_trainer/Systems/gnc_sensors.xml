@@ -19,20 +19,36 @@
 -->
 <system name="gnc_sensors">
   <property value="0"> sensors/enabled </property>
+  <!-- Gyro biases [rad/s] (Module 15): 0 by default; a Monte Carlo disperses them. -->
+  <property value="0"> sensors/gyro-bias-p-rad_sec </property>
+  <property value="0"> sensors/gyro-bias-q-rad_sec </property>
+  <property value="0"> sensors/gyro-bias-r-rad_sec </property>
 
   <channel name="Sensor models">
-    <sensor name="sensors/p-rad_sec">
+    <summer name="sensors/p-biased">
       <input> velocities/p-rad_sec </input>
+      <input> sensors/gyro-bias-p-rad_sec </input>
+    </summer>
+    <sensor name="sensors/p-rad_sec">
+      <input> sensors/p-biased </input>
       <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
       <quantization name="sensors/p-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
     </sensor>
-    <sensor name="sensors/q-rad_sec">
+    <summer name="sensors/q-biased">
       <input> velocities/q-rad_sec </input>
+      <input> sensors/gyro-bias-q-rad_sec </input>
+    </summer>
+    <sensor name="sensors/q-rad_sec">
+      <input> sensors/q-biased </input>
       <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
       <quantization name="sensors/q-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
     </sensor>
-    <sensor name="sensors/r-rad_sec">
+    <summer name="sensors/r-biased">
       <input> velocities/r-rad_sec </input>
+      <input> sensors/gyro-bias-r-rad_sec </input>
+    </summer>
+    <sensor name="sensors/r-rad_sec">
+      <input> sensors/r-biased </input>
       <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
       <quantization name="sensors/r-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
     </sensor>

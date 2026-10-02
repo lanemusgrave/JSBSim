@@ -39,6 +39,7 @@ Read the generator top to bottom. The highlights:
 | Inertia | `negated_crossproduct_inertia="false"` + textbook J<sub>xz</sub> | JSBSim's *default* expects the opposite sign of I<sub>xz</sub>, a classic roll/yaw coupling bug. |
 | Propulsion | B&M's DC-motor + propeller model, solved **algebraically** in a `<system>` and applied through `<external_reactions>` (thrust force and reaction torque) | See below. |
 | FCS | normalized commands + trim → `aerosurface_scale` → optional **actuator** (lag 40 rad/s, 250°/s rate limit) selected by `fcs/actuators-on` | Ideal surfaces for linearization, realistic ones for flight (Module 08). |
+| Uncertainty hooks | `uncertainty/<coef>-scale` multipliers (default 1) on 11 aero/thrust terms, a 0 kg `PAYLOAD` point mass, actuator lag and rate as properties | Added for the Monte Carlo in Module 15: build the dispersion knobs into the model from day one. |
 
 ### A war story: why not JSBSim's `<electric_engine>` + `<propeller>`?
 

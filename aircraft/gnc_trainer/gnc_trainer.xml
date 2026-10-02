@@ -85,7 +85,7 @@
   <!-- Thrust along the shaft and the motor reaction torque on the airframe. -->
   <external_reactions>
     <force name="propeller" frame="BODY">
-      <function> <product> <property> propulsion/thrust-N </property> <value> 0.224809 </value> </product> </function>
+      <function> <product> <property> propulsion/thrust-N </property> <property> uncertainty/thrust-scale </property> <value> 0.224809 </value> </product> </function>
       <location unit="M"> <x> 0.0 </x> <y> 0 </y> <z> 0 </z> </location>
       <direction> <x> 1 </x> <y> 0 </y> <z> 0 </z> </direction>
     </force>
@@ -110,6 +110,21 @@
     <property value="0"> ap/aileron-cmd-norm </property>
     <property value="0"> ap/rudder-cmd-norm </property>
     <property value="0"> ap/throttle-cmd-norm </property>
+    <!-- Actuator parameters, properties so a Monte Carlo can disperse them. -->
+    <property value="40.0"> fcs/actuator-bw-rad_sec </property>
+    <property value="4.3633"> fcs/actuator-rate-rad_sec </property>
+    <!-- Aero/propulsion uncertainty multipliers (1 = nominal), Module 15. -->
+    <property value="1"> uncertainty/CL-scale </property>  <!-- lift curve -->
+    <property value="1"> uncertainty/CD-scale </property>  <!-- drag -->
+    <property value="1"> uncertainty/Cma-scale </property>  <!-- pitch stiffness -->
+    <property value="1"> uncertainty/Cmq-scale </property>  <!-- pitch damping -->
+    <property value="1"> uncertainty/Cmde-scale </property>  <!-- elevator power -->
+    <property value="1"> uncertainty/Clb-scale </property>  <!-- dihedral effect -->
+    <property value="1"> uncertainty/Clp-scale </property>  <!-- roll damping -->
+    <property value="1"> uncertainty/Clda-scale </property>  <!-- aileron power -->
+    <property value="1"> uncertainty/Cnb-scale </property>  <!-- weathercock stability -->
+    <property value="1"> uncertainty/Cnr-scale </property>  <!-- yaw damping -->
+    <property value="1"> uncertainty/thrust-scale </property>  <!-- propeller thrust -->
   </system>
   <system file="gnc_sensors"/>
   <system file="gnc_autopilot"/>
@@ -226,8 +241,8 @@
       <!-- Actuator model: first-order lag + rate limit + travel limit. -->
       <actuator name="fcs/elevator-actuator">
         <input> fcs/elevator-cmd-rad </input>
-        <lag> 40.0 </lag>
-        <rate_limit> 4.3633 </rate_limit>
+        <lag> fcs/actuator-bw-rad_sec </lag>
+        <rate_limit> fcs/actuator-rate-rad_sec </rate_limit>
         <clipto> <min> -0.43633 </min> <max> 0.43633 </max> </clipto>
       </actuator>
       <!-- fcs/actuators-on = 0 (default): ideal surfaces (needed for
@@ -252,8 +267,8 @@
       <!-- Actuator model: first-order lag + rate limit + travel limit. -->
       <actuator name="fcs/aileron-actuator">
         <input> fcs/aileron-cmd-rad </input>
-        <lag> 40.0 </lag>
-        <rate_limit> 4.3633 </rate_limit>
+        <lag> fcs/actuator-bw-rad_sec </lag>
+        <rate_limit> fcs/actuator-rate-rad_sec </rate_limit>
         <clipto> <min> -0.43633 </min> <max> 0.43633 </max> </clipto>
       </actuator>
       <!-- fcs/actuators-on = 0 (default): ideal surfaces (needed for
@@ -278,8 +293,8 @@
       <!-- Actuator model: first-order lag + rate limit + travel limit. -->
       <actuator name="fcs/rudder-actuator">
         <input> fcs/rudder-cmd-rad </input>
-        <lag> 40.0 </lag>
-        <rate_limit> 4.3633 </rate_limit>
+        <lag> fcs/actuator-bw-rad_sec </lag>
+        <rate_limit> fcs/actuator-rate-rad_sec </rate_limit>
         <clipto> <min> -0.43633 </min> <max> 0.43633 </max> </clipto>
       </actuator>
       <!-- fcs/actuators-on = 0 (default): ideal surfaces (needed for
@@ -302,6 +317,7 @@
         <product>
           <property> aero/qbar-psf </property>
           <property> metrics/Sw-sqft </property>
+          <property> uncertainty/CL-scale </property>
           <table>
             <independentVar lookup="row"> aero/alpha-rad </independentVar>
             <tableData>
@@ -369,6 +385,7 @@
         <product>
           <property> aero/qbar-psf </property>
           <property> metrics/Sw-sqft </property>
+          <property> uncertainty/CD-scale </property>
           <table>
             <independentVar lookup="row"> aero/alpha-rad </independentVar>
             <tableData>
@@ -462,6 +479,7 @@
           <property> metrics/Sw-sqft </property>
           <property> metrics/cbarw-ft </property>
           <property> aero/alpha-rad </property>
+          <property> uncertainty/Cma-scale </property>
           <value> -2.74 </value>
         </product>
       </function>
@@ -473,6 +491,7 @@
           <property> metrics/cbarw-ft </property>
           <property> aero/ci2vel </property>
           <property> velocities/q-aero-rad_sec </property>
+          <property> uncertainty/Cmq-scale </property>
           <value> -38.21 </value>
         </product>
       </function>
@@ -483,6 +502,7 @@
           <property> metrics/Sw-sqft </property>
           <property> metrics/cbarw-ft </property>
           <property> fcs/elevator-pos-rad </property>
+          <property> uncertainty/Cmde-scale </property>
           <value> -0.99 </value>
         </product>
       </function>
@@ -496,6 +516,7 @@
           <property> metrics/Sw-sqft </property>
           <property> metrics/bw-ft </property>
           <property> aero/beta-rad </property>
+          <property> uncertainty/Clb-scale </property>
           <value> -0.13 </value>
         </product>
       </function>
@@ -507,6 +528,7 @@
           <property> metrics/bw-ft </property>
           <property> aero/bi2vel </property>
           <property> velocities/p-aero-rad_sec </property>
+          <property> uncertainty/Clp-scale </property>
           <value> -0.51 </value>
         </product>
       </function>
@@ -528,6 +550,7 @@
           <property> metrics/Sw-sqft </property>
           <property> metrics/bw-ft </property>
           <property> fcs/aileron-pos-rad </property>
+          <property> uncertainty/Clda-scale </property>
           <value> 0.17 </value>
         </product>
       </function>
@@ -551,6 +574,7 @@
           <property> metrics/Sw-sqft </property>
           <property> metrics/bw-ft </property>
           <property> aero/beta-rad </property>
+          <property> uncertainty/Cnb-scale </property>
           <value> 0.073 </value>
         </product>
       </function>
@@ -573,6 +597,7 @@
           <property> metrics/bw-ft </property>
           <property> aero/bi2vel </property>
           <property> velocities/r-aero-rad_sec </property>
+          <property> uncertainty/Cnr-scale </property>
           <value> -0.095 </value>
         </product>
       </function>

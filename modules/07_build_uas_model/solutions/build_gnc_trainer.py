@@ -89,9 +89,20 @@ def table_1d(var: str, xs, ys, indent: str) -> str:
             f"{indent}  <tableData>\n{rows}\n{indent}  </tableData>\n{indent}</table>")
 
 
-def coeff_fn(name: str, desc: str, factors: list[str], value: float, ref: str = "") -> str:
-    """A <function> = qbar * S * [ref length] * factors... * value."""
+# Uncertainty multipliers (Module 15).  Each scales one aero term; all default
+# to 1 (declared in the "interfaces" system), so the nominal model is unchanged.
+# A Monte Carlo sets e.g. fdm["uncertainty/Cma-scale"] = 0.8 before run_ic().
+UNCERTAIN = {"CL": "lift curve", "CD": "drag", "Cma": "pitch stiffness", "Cmq": "pitch damping",
+             "Cmde": "elevator power", "Clb": "dihedral effect", "Clp": "roll damping",
+             "Clda": "aileron power", "Cnb": "weathercock stability", "Cnr": "yaw damping",
+             "thrust": "propeller thrust"}
+
+
+def coeff_fn(name: str, desc: str, factors: list[str], value: float, ref: str = "", scale: str = "") -> str:
+    """A <function> = qbar * S * [ref length] * factors... * value [* uncertainty/<scale>-scale]."""
     props = ["aero/qbar-psf", "metrics/Sw-sqft"] + ([ref] if ref else []) + factors
+    if scale:
+        props.append(f"uncertainty/{scale}-scale")
     inner = "\n".join(f"          <property> {p} </property>" for p in props)
     return (f"      <function name=\"{name}\">\n        <description> {desc} </description>\n"
             f"        <product>\n{inner}\n          <value> {value:.6g} </value>\n        </product>\n"
@@ -118,6 +129,7 @@ def build_aero() -> str:
         <product>
           <property> aero/qbar-psf </property>
           <property> metrics/Sw-sqft </property>
+          <property> uncertainty/CL-scale </property>
 {cl_tab}
         </product>
       </function>
@@ -131,6 +143,7 @@ def build_aero() -> str:
         <product>
           <property> aero/qbar-psf </property>
           <property> metrics/Sw-sqft </property>
+          <property> uncertainty/CD-scale </property>
 {cd_tab}
         </product>
       </function>
@@ -156,23 +169,23 @@ def build_aero() -> str:
         <product> <property> aero/qbar-psf </property> <property> metrics/Sw-sqft </property>
                   <property> {cb} </property> <value> {P['Cm0']} </value> </product>
       </function>
-{coeff_fn("aero/moment/Cm_alpha", f"Cma = {P['Cma']}", ["aero/alpha-rad"], P["Cma"], cb)}
-{coeff_fn("aero/moment/Cm_q", f"Cmq = {P['Cmq']}", q_nd, P["Cmq"], cb)}
-{coeff_fn("aero/moment/Cm_de", f"Cmde = {P['Cmde']}", de, P["Cmde"], cb)}
+{coeff_fn("aero/moment/Cm_alpha", f"Cma = {P['Cma']}", ["aero/alpha-rad"], P["Cma"], cb, "Cma")}
+{coeff_fn("aero/moment/Cm_q", f"Cmq = {P['Cmq']}", q_nd, P["Cmq"], cb, "Cmq")}
+{coeff_fn("aero/moment/Cm_de", f"Cmde = {P['Cmde']}", de, P["Cmde"], cb, "Cmde")}
     </axis>
 
     <axis name="ROLL">
-{coeff_fn("aero/moment/Cl_beta", f"Clb = {P['Clb']}", beta, P["Clb"], bw)}
-{coeff_fn("aero/moment/Cl_p", f"Clp = {P['Clp']}", p_nd, P["Clp"], bw)}
+{coeff_fn("aero/moment/Cl_beta", f"Clb = {P['Clb']}", beta, P["Clb"], bw, "Clb")}
+{coeff_fn("aero/moment/Cl_p", f"Clp = {P['Clp']}", p_nd, P["Clp"], bw, "Clp")}
 {coeff_fn("aero/moment/Cl_r", f"Clr = {P['Clr']}", r_nd, P["Clr"], bw)}
-{coeff_fn("aero/moment/Cl_da", f"Clda = {P['Clda']}", da, P["Clda"], bw)}
+{coeff_fn("aero/moment/Cl_da", f"Clda = {P['Clda']}", da, P["Clda"], bw, "Clda")}
 {coeff_fn("aero/moment/Cl_dr", f"Cldr = {P['Cldr']}", dr, P["Cldr"], bw)}
     </axis>
 
     <axis name="YAW">
-{coeff_fn("aero/moment/Cn_beta", f"Cnb = {P['Cnb']}", beta, P["Cnb"], bw)}
+{coeff_fn("aero/moment/Cn_beta", f"Cnb = {P['Cnb']}", beta, P["Cnb"], bw, "Cnb")}
 {coeff_fn("aero/moment/Cn_p", f"Cnp = {P['Cnp']}", p_nd, P["Cnp"], bw)}
-{coeff_fn("aero/moment/Cn_r", f"Cnr = {P['Cnr']}", r_nd, P["Cnr"], bw)}
+{coeff_fn("aero/moment/Cn_r", f"Cnr = {P['Cnr']}", r_nd, P["Cnr"], bw, "Cnr")}
 {coeff_fn("aero/moment/Cn_da", f"Cnda = {P['Cnda']}", da, P["Cnda"], bw)}
 {coeff_fn("aero/moment/Cn_dr", f"Cndr = {P['Cndr']}", dr, P["Cndr"], bw)}
     </axis>
@@ -194,8 +207,8 @@ def surface_channel(name: str, cmd: str, trim: str, out: str, limit: float) -> s
       <!-- Actuator model: first-order lag + rate limit + travel limit. -->
       <actuator name="fcs/{out}-actuator">
         <input> fcs/{out}-cmd-rad </input>
-        <lag> {P['act_bw']} </lag>
-        <rate_limit> {P['act_rate']:.4f} </rate_limit>
+        <lag> fcs/actuator-bw-rad_sec </lag>
+        <rate_limit> fcs/actuator-rate-rad_sec </rate_limit>
         <clipto> <min> {-limit:.5f} </min> <max> {limit:.5f} </max> </clipto>
       </actuator>
       <!-- fcs/actuators-on = 0 (default): ideal surfaces (needed for
@@ -210,6 +223,8 @@ def surface_channel(name: str, cmd: str, trim: str, out: str, limit: float) -> s
 
 def build_aircraft() -> str:
     m2in = 39.3701
+    uncertain_props = "\n".join(f'    <property value="1"> uncertainty/{k}-scale </property>  <!-- {v} -->'
+                                 for k, v in UNCERTAIN.items())
     return f"""<?xml version="1.0"?>
 <!--
   gnc_trainer: a ~11 kg, 2.9 m span fixed-wing UAS for the JSBSim GNC curriculum.
@@ -297,7 +312,7 @@ def build_aircraft() -> str:
   <!-- Thrust along the shaft and the motor reaction torque on the airframe. -->
   <external_reactions>
     <force name="propeller" frame="BODY">
-      <function> <product> <property> propulsion/thrust-N </property> <value> 0.224809 </value> </product> </function>
+      <function> <product> <property> propulsion/thrust-N </property> <property> uncertainty/thrust-scale </property> <value> 0.224809 </value> </product> </function>
       <location unit="M"> <x> {X_PROP} </x> <y> 0 </y> <z> 0 </z> </location>
       <direction> <x> 1 </x> <y> 0 </y> <z> 0 </z> </direction>
     </force>
@@ -322,6 +337,11 @@ def build_aircraft() -> str:
     <property value="0"> ap/aileron-cmd-norm </property>
     <property value="0"> ap/rudder-cmd-norm </property>
     <property value="0"> ap/throttle-cmd-norm </property>
+    <!-- Actuator parameters, properties so a Monte Carlo can disperse them. -->
+    <property value="{P['act_bw']}"> fcs/actuator-bw-rad_sec </property>
+    <property value="{P['act_rate']:.4f}"> fcs/actuator-rate-rad_sec </property>
+    <!-- Aero/propulsion uncertainty multipliers (1 = nominal), Module 15. -->
+{uncertain_props}
   </system>
   <system file="gnc_sensors"/>
   <system file="gnc_autopilot"/>
