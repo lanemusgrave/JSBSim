@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<!--
+  Module 08 solution: a pitch-rate damper for gnc_trainer.
+      ap/elevator-cmd-norm = Kq * q_fb          (when ap/pitch-damper-on = 1)
+  Positive q (nose pitching up) -> positive (trailing-edge-down) elevator ->
+  nose-down moment: negative feedback.  Kq is in normalized elevator per rad/s
+  (full elevator = 25 deg = 0.436 rad).
+
+  Fly it with:  make_fdm("gnc_trainer", systems_dir="modules/08_fcs_components/solutions/fcs")
+-->
+<system name="gnc_autopilot">
+  <property value="0">    ap/pitch-damper-on </property>
+  <property value="0.15"> ap/kq </property>
+  <property value="0">    ap/q-delay-on </property>
+
+  <channel name="Pitch damper">
+    <!-- An optional extra 0.1 s of transport delay, to see what latency does.
+         GOTCHA (JSBSim 1.3.1): every component parses <delay>, but only
+         <actuator>, <sensor> and <switch> apply it - on a pure_gain, filter or
+         summer it is silently ignored.  A noise-free <sensor> is a clean delay. -->
+    <sensor name="ap/q-delayed">
+      <input> fb/q-rad_sec </input>
+      <delay type="time"> 0.1 </delay>
+    </sensor>
+    <switch name="ap/q-used">
+      <default value="fb/q-rad_sec"/>
+      <test value="ap/q-delayed"> ap/q-delay-on == 1 </test>
+    </switch>
+    <pure_gain name="ap/damper-cmd">
+      <input> ap/q-used </input>
+      <gain> ap/kq </gain>
+      <clipto> <min> -0.5 </min> <max> 0.5 </max> </clipto>   <!-- authority limit -->
+    </pure_gain>
+    <switch name="ap/elevator-damper">
+      <default value="0"/>
+      <test value="ap/damper-cmd"> ap/pitch-damper-on == 1 </test>
+      <output> ap/elevator-cmd-norm </output>
+    </switch>
+  </channel>
+</system>

@@ -1,0 +1,130 @@
+<?xml version="1.0"?>
+<!--
+  Module 08: an FCS component test rig.
+
+  The "airframe" is a massive ball that just falls; nothing here depends on its
+  motion.  The point is the <system> below: every JSBSim FCS component type,
+  each driven by the same input property rig/input, each with its own output
+  property so you can plot them side by side.
+
+  Transfer functions use JSBSim's coefficient conventions (RM 2.7):
+    lag_filter       C1 / (s + C1)
+    lead_lag_filter  (C1 s + C2) / (C3 s + C4)
+    washout_filter   s / (s + C1)
+    second_order     (C1 s^2 + C2 s + C3) / (C4 s^2 + C5 s + C6)
+    integrator       C1 / s
+-->
+<fdm_config name="m08_fcs_rig" version="2.0" release="ALPHA">
+  <fileheader> <author> JSBSim GNC Lab </author> <description> FCS component test rig </description> </fileheader>
+  <metrics>
+    <wingarea unit="FT2"> 1 </wingarea> <wingspan unit="FT"> 1 </wingspan> <chord unit="FT"> 1 </chord>
+    <location name="AERORP" unit="IN"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </metrics>
+  <mass_balance>
+    <ixx unit="SLUG*FT2"> 10 </ixx> <iyy unit="SLUG*FT2"> 10 </iyy> <izz unit="SLUG*FT2"> 10 </izz>
+    <emptywt unit="LBS"> 1000 </emptywt>
+    <location name="CG" unit="IN"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </mass_balance>
+  <ground_reactions/>
+  <propulsion/>
+
+  <system name="rig">
+    <property value="0"> rig/input </property>
+    <property value="0"> rig/pid-trigger </property>
+
+    <channel name="Actuators">
+      <actuator name="rig/act-lag">          <!-- first-order lag, 10 rad/s -->
+        <input> rig/input </input> <lag> 10 </lag>
+      </actuator>
+      <actuator name="rig/act-rate">         <!-- rate limit 1 unit/s -->
+        <input> rig/input </input> <rate_limit> 1.0 </rate_limit>
+      </actuator>
+      <actuator name="rig/act-deadband">     <!-- no output until |input| > 0.1 -->
+        <input> rig/input </input> <deadband_width> 0.2 </deadband_width>
+      </actuator>
+      <actuator name="rig/act-hysteresis">   <!-- backlash: output lags reversals by 0.1 -->
+        <input> rig/input </input> <hysteresis_width> 0.2 </hysteresis_width>
+      </actuator>
+      <actuator name="rig/act-realistic">    <!-- lag + rate limit + travel limit + delay -->
+        <input> rig/input </input>
+        <lag> 30 </lag> <rate_limit> 2.0 </rate_limit>
+        <clipto> <min> -0.8 </min> <max> 0.8 </max> </clipto>
+        <delay type="time"> 0.05 </delay>
+      </actuator>
+    </channel>
+
+    <channel name="Sensors">
+      <sensor name="rig/sens-noise">
+        <input> rig/input </input> <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.05 </noise>
+      </sensor>
+      <sensor name="rig/sens-bias-drift">
+        <input> rig/input </input> <bias> 0.1 </bias> <drift_rate> 0.02 </drift_rate>
+      </sensor>
+      <sensor name="rig/sens-quantized">
+        <input> rig/input </input>
+        <quantization name="rig/sens-quantized-raw"> <bits> 4 </bits> <min> -1.5 </min> <max> 1.5 </max> </quantization>
+      </sensor>
+      <sensor name="rig/sens-lag">
+        <input> rig/input </input> <lag> 5 </lag>
+      </sensor>
+      <sensor name="rig/sens-delay">
+        <input> rig/input </input> <delay type="time"> 0.25 </delay>
+      </sensor>
+    </channel>
+
+    <channel name="Filters">
+      <lag_filter name="rig/flt-lag">              <!-- 5/(s+5) -->
+        <input> rig/input </input> <c1> 5 </c1>
+      </lag_filter>
+      <lead_lag_filter name="rig/flt-leadlag">     <!-- (0.5 s + 1)/(0.1 s + 1): phase lead -->
+        <input> rig/input </input> <c1> 0.5 </c1> <c2> 1 </c2> <c3> 0.1 </c3> <c4> 1 </c4>
+      </lead_lag_filter>
+      <washout_filter name="rig/flt-washout">      <!-- s/(s+1): passes changes, blocks steady values -->
+        <input> rig/input </input> <c1> 1.0 </c1>
+      </washout_filter>
+      <second_order_filter name="rig/flt-notch">   <!-- notch at 6.28 rad/s (1 Hz) -->
+        <input> rig/input </input>
+        <c1> 1 </c1> <c2> 0 </c2> <c3> 39.48 </c3>
+        <c4> 1 </c4> <c5> 6.28 </c5> <c6> 39.48 </c6>
+      </second_order_filter>
+      <integrator name="rig/flt-integrator">       <!-- 1/s, clipped -->
+        <input> rig/input </input> <c1> 1.0 </c1>
+        <clipto> <min> -2 </min> <max> 2 </max> </clipto>
+      </integrator>
+      <pid name="rig/pid">                         <!-- kp + ki/s + kd s; trigger != 0 resets/holds the integrator -->
+        <input> rig/input </input>
+        <kp> 1.0 </kp> <ki> 0.5 </ki> <kd> 0.0 </kd>
+        <trigger> rig/pid-trigger </trigger>
+      </pid>
+    </channel>
+
+    <channel name="Logic and math">
+      <pure_gain name="rig/gain">  <input> rig/input </input> <gain> -2.0 </gain> </pure_gain>
+      <summer name="rig/sum">
+        <input> rig/input </input> <input> -rig/flt-lag </input>   <!-- a minus sign negates an input -->
+      </summer>
+      <switch name="rig/switch">
+        <default value="0"/>
+        <test logic="AND" value="rig/input"> rig/input gt 0.0 </test>   <!-- passes positive input only -->
+      </switch>
+      <fcs_function name="rig/function">
+        <function> <sin> <product> <property> rig/input </property> <value> 1.5708 </value> </product> </sin> </function>
+      </fcs_function>
+      <kinematic name="rig/kinematic">             <!-- moves through detents at a fixed rate, like flaps -->
+        <input> rig/input </input>
+        <traverse>
+          <setting> <position> 0 </position> <time> 0 </time> </setting>
+          <setting> <position> 1 </position> <time> 2 </time> </setting>
+        </traverse>
+      </kinematic>
+    </channel>
+  </system>
+
+  <aerodynamics>   <!-- a dummy drag term: JSBSim requires an aerodynamics section -->
+    <axis name="DRAG">
+      <function name="aero/force/D">
+        <product> <property> aero/qbar-psf </property> <value> 0.0 </value> </product>
+      </function>
+    </axis>
+  </aerodynamics>
+</fdm_config>

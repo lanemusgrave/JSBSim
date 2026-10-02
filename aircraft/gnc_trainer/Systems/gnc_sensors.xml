@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<!--
+  gnc_trainer sensor models (Module 08).  Hand-written (not generated).
+
+  Every feedback signal the autopilot uses is published as fb/<name>:
+     sensors/enabled = 0 (default)  ->  fb/<name> = truth
+     sensors/enabled = 1            ->  fb/<name> = sensor model output
+  So the same autopilot can be flown on perfect data (design/debug) and on
+  realistic data (verification), and you can see exactly what each
+  non-ideality costs.
+
+  Representative small-UAS (MEMS IMU + AHRS + pitot + baro + GPS) numbers:
+    gyro      : white noise 0.0025 rad/s (0.14 deg/s), 16-bit +/- 8.7 rad/s
+    AHRS      : attitude noise 0.003 rad (0.17 deg), 20 rad/s bandwidth
+    heading   : noise 0.01 rad (0.6 deg)
+    pitot     : noise 1.0 ft/s (0.3 m/s), 10 rad/s lag
+    baro alt  : noise 2 ft (0.6 m), 5 rad/s lag
+    GPS course: noise 0.01 rad, 0.2 s latency
+-->
+<system name="gnc_sensors">
+  <property value="0"> sensors/enabled </property>
+  <!-- Gyro biases [rad/s] (Module 15): 0 by default; a Monte Carlo disperses them. -->
+  <property value="0"> sensors/gyro-bias-p-rad_sec </property>
+  <property value="0"> sensors/gyro-bias-q-rad_sec </property>
+  <property value="0"> sensors/gyro-bias-r-rad_sec </property>
+
+  <channel name="Sensor models">
+    <summer name="sensors/p-biased">
+      <input> velocities/p-rad_sec </input>
+      <input> sensors/gyro-bias-p-rad_sec </input>
+    </summer>
+    <sensor name="sensors/p-rad_sec">
+      <input> sensors/p-biased </input>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
+      <quantization name="sensors/p-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
+    </sensor>
+    <summer name="sensors/q-biased">
+      <input> velocities/q-rad_sec </input>
+      <input> sensors/gyro-bias-q-rad_sec </input>
+    </summer>
+    <sensor name="sensors/q-rad_sec">
+      <input> sensors/q-biased </input>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
+      <quantization name="sensors/q-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
+    </sensor>
+    <summer name="sensors/r-biased">
+      <input> velocities/r-rad_sec </input>
+      <input> sensors/gyro-bias-r-rad_sec </input>
+    </summer>
+    <sensor name="sensors/r-rad_sec">
+      <input> sensors/r-biased </input>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.0025 </noise>
+      <quantization name="sensors/r-quantized"> <bits> 16 </bits> <min> -8.73 </min> <max> 8.73 </max> </quantization>
+    </sensor>
+    <sensor name="sensors/phi-rad">
+      <input> attitude/phi-rad </input>
+      <lag> 20 </lag>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.003 </noise>
+    </sensor>
+    <sensor name="sensors/theta-rad">
+      <input> attitude/theta-rad </input>
+      <lag> 20 </lag>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.003 </noise>
+    </sensor>
+    <sensor name="sensors/psi-rad">
+      <input> attitude/psi-rad </input>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.01 </noise>
+    </sensor>
+    <sensor name="sensors/vt-fps">
+      <input> velocities/vt-fps </input>
+      <lag> 10 </lag>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 1.0 </noise>
+    </sensor>
+    <sensor name="sensors/h-ft">
+      <input> position/h-sl-ft </input>
+      <lag> 5 </lag>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 2.0 </noise>
+    </sensor>
+    <sensor name="sensors/chi-rad">
+      <input> flight-path/psi-gt-rad </input>
+      <noise variation="ABSOLUTE" distribution="GAUSSIAN"> 0.01 </noise>
+      <delay type="time"> 0.2 </delay>
+    </sensor>
+  </channel>
+
+  <channel name="Feedback select">
+    <switch name="fb/p-rad_sec">  <default value="velocities/p-rad_sec"/> <test value="sensors/p-rad_sec">  sensors/enabled == 1 </test> </switch>
+    <switch name="fb/q-rad_sec">  <default value="velocities/q-rad_sec"/> <test value="sensors/q-rad_sec">  sensors/enabled == 1 </test> </switch>
+    <switch name="fb/r-rad_sec">  <default value="velocities/r-rad_sec"/> <test value="sensors/r-rad_sec">  sensors/enabled == 1 </test> </switch>
+    <switch name="fb/phi-rad">    <default value="attitude/phi-rad"/>     <test value="sensors/phi-rad">    sensors/enabled == 1 </test> </switch>
+    <switch name="fb/theta-rad">  <default value="attitude/theta-rad"/>   <test value="sensors/theta-rad">  sensors/enabled == 1 </test> </switch>
+    <switch name="fb/psi-rad">    <default value="attitude/psi-rad"/>     <test value="sensors/psi-rad">    sensors/enabled == 1 </test> </switch>
+    <switch name="fb/vt-fps">     <default value="velocities/vt-fps"/>    <test value="sensors/vt-fps">     sensors/enabled == 1 </test> </switch>
+    <switch name="fb/h-ft">       <default value="position/h-sl-ft"/>     <test value="sensors/h-ft">       sensors/enabled == 1 </test> </switch>
+    <switch name="fb/chi-rad">    <default value="flight-path/psi-gt-rad"/> <test value="sensors/chi-rad">  sensors/enabled == 1 </test> </switch>
+  </channel>
+</system>

@@ -1,0 +1,146 @@
+<?xml version="1.0"?>
+<!--
+  Module 03 solution: a flight-test card as a JSBSim script.
+
+  Card: C172, 4000 ft, trimmed cruise.
+    TP1  t=10 s  elevator doublet   +/-0.10, 1 s each half
+    TP2  t=30 s  aileron doublet    +/-0.20, 1 s each half
+    TP3  t=50 s  rudder doublet     +/-0.20, 1 s each half
+    TP4  t=70 s  full-power climb   throttle ramp to 1.0 (tc = 2 s)
+  Re-trim (re-establish the test condition) at t = 25, 45 and 65 s.
+  Watch item: notify if bank exceeds 30 deg (persistent - fires every time).
+
+  Run from Python:   python modules/03_scripts_events_output/solutions/analyze_testcard.py
+  Run from the CLI:  jsbsim (double-dash)root=DATA_DIR (double-dash)script=FULL_PATH_TO_THIS_FILE
+  (XML comments may not contain two dashes in a row, hence the spelling.)
+-->
+<runscript name="C172 test card">
+  <use aircraft="c172x" initialize="reset01"/>
+
+  <!-- CSV log: written to the folder given by fdm.set_output_path (outputs/ with gnclab) -->
+  <output name="c172_testcard.csv" type="CSV" rate="20">
+    <property caption="kcas">         velocities/vc-kts           </property>
+    <property caption="alt_ft">       position/h-sl-ft            </property>
+    <property caption="alpha_deg">    aero/alpha-deg              </property>
+    <property caption="beta_deg">     aero/beta-deg               </property>
+    <property caption="theta_deg">    attitude/theta-deg          </property>
+    <property caption="phi_deg">      attitude/phi-deg            </property>
+    <property caption="psi_deg">      attitude/psi-deg            </property>
+    <property caption="p_rps">        velocities/p-rad_sec        </property>
+    <property caption="q_rps">        velocities/q-rad_sec        </property>
+    <property caption="r_rps">        velocities/r-rad_sec        </property>
+    <property caption="nz_g">         accelerations/Nz            </property>
+    <property caption="de_cmd">       fcs/elevator-cmd-norm       </property>
+    <property caption="da_cmd">       fcs/aileron-cmd-norm        </property>
+    <property caption="dr_cmd">       fcs/rudder-cmd-norm         </property>
+    <property caption="throttle">     fcs/throttle-cmd-norm[0]    </property>
+    <!-- NOTE: test/point (declared in <run> below) can NOT be logged here:
+         the <output> block is read before the script's local properties
+         exist.  JSBSim warns "No property by the name test/point". -->
+  </output>
+
+  <run start="0.0" end="90" dt="0.008333333333">
+
+    <!-- A local property: declared here, usable in events and output -->
+    <property value="0"> test/point </property>
+
+    <event name="Trim">
+      <condition> simulation/sim-time-sec ge 0.5 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <notify>
+        <property caption="KCAS">           velocities/vc-kts        </property>
+        <property caption="alpha [deg]">    aero/alpha-deg           </property>
+        <property caption="throttle">       fcs/throttle-cmd-norm[0] </property>
+      </notify>
+    </event>
+
+    <!-- TP1: elevator doublet built from three DELTA steps -->
+    <event name="TP1 elevator doublet: up">
+      <condition> simulation/sim-time-sec ge 10 </condition>
+      <set name="test/point" value="1"/>
+      <set name="fcs/elevator-cmd-norm" value="-0.10" type="FG_DELTA"/>
+      <notify/>
+    </event>
+    <event name="TP1: down">
+      <condition> simulation/sim-time-sec ge 11 </condition>
+      <set name="fcs/elevator-cmd-norm" value="0.20" type="FG_DELTA"/>
+    </event>
+    <event name="TP1: neutral">
+      <condition> simulation/sim-time-sec ge 12 </condition>
+      <set name="fcs/elevator-cmd-norm" value="-0.10" type="FG_DELTA"/>
+    </event>
+
+    <!-- Re-establish the test condition before TP2, like a test pilot would -->
+    <event name="Re-trim before TP2">
+      <condition> simulation/sim-time-sec ge 25 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <notify/>
+    </event>
+
+    <!-- TP2: aileron doublet -->
+    <event name="TP2 aileron doublet">
+      <condition> simulation/sim-time-sec ge 30 </condition>
+      <set name="test/point" value="2"/>
+      <set name="fcs/aileron-cmd-norm" value="0.20" type="FG_DELTA"/>
+      <notify/>
+    </event>
+    <event name="TP2: reverse">
+      <condition> simulation/sim-time-sec ge 31 </condition>
+      <set name="fcs/aileron-cmd-norm" value="-0.40" type="FG_DELTA"/>
+    </event>
+    <event name="TP2: neutral">
+      <condition> simulation/sim-time-sec ge 32 </condition>
+      <set name="fcs/aileron-cmd-norm" value="0.20" type="FG_DELTA"/>
+    </event>
+
+    <!-- Re-establish the test condition before TP3, like a test pilot would -->
+    <event name="Re-trim before TP3">
+      <condition> simulation/sim-time-sec ge 45 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <notify/>
+    </event>
+
+    <!-- TP3: rudder doublet -->
+    <event name="TP3 rudder doublet">
+      <condition> simulation/sim-time-sec ge 50 </condition>
+      <set name="test/point" value="3"/>
+      <set name="fcs/rudder-cmd-norm" value="0.20" type="FG_DELTA"/>
+      <notify/>
+    </event>
+    <event name="TP3: reverse">
+      <condition> simulation/sim-time-sec ge 51 </condition>
+      <set name="fcs/rudder-cmd-norm" value="-0.40" type="FG_DELTA"/>
+    </event>
+    <event name="TP3: neutral">
+      <condition> simulation/sim-time-sec ge 52 </condition>
+      <set name="fcs/rudder-cmd-norm" value="0.20" type="FG_DELTA"/>
+    </event>
+
+    <!-- Re-establish the test condition before TP4, like a test pilot would -->
+    <event name="Re-trim before TP4">
+      <condition> simulation/sim-time-sec ge 65 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <notify/>
+    </event>
+
+    <!-- TP4: smooth throttle advance -->
+    <event name="TP4 full power">
+      <condition> simulation/sim-time-sec ge 70 </condition>
+      <set name="test/point" value="4"/>
+      <set name="fcs/throttle-cmd-norm" value="1.0" action="FG_RAMP" tc="2.0"/>
+      <notify/>
+    </event>
+
+    <!-- Watch item: fires each time the condition goes false -> true -->
+    <event name="BANK > 30 deg" persistent="true">
+      <condition logic="OR">
+        attitude/phi-deg gt 30
+        attitude/phi-deg lt -30
+      </condition>
+      <notify>
+        <property caption="phi [deg]"> attitude/phi-deg </property>
+      </notify>
+    </event>
+
+  </run>
+</runscript>

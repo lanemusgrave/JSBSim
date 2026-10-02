@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<initialize name="init">
+  <altitude unit="FT"> 10000 </altitude>
+  <vt unit="FT/SEC"> 0 </vt>
+</initialize>

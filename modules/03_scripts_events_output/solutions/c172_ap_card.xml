@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!--
+  Module 03 exercise solution: let the C172 autopilot fly a card.
+    t = 1 s   trim, engage altitude hold at 4000 ft and roll (heading) hold on 200 deg
+    t = 15 s  heading change to 290 deg (90 deg right)
+    when within 2 deg of 290: notify (fires once), then climb to 4500 ft
+    t = 100 s end
+  Log at 10 Hz.
+-->
+<runscript name="C172 autopilot card">
+  <use aircraft="c172x" initialize="reset01"/>
+
+  <output name="c172_ap_card.csv" type="CSV" rate="10">
+    <property caption="kcas">        velocities/vc-kts            </property>
+    <property caption="alt_ft">      position/h-sl-ft             </property>
+    <property caption="psi_deg">     attitude/psi-deg             </property>
+    <property caption="phi_deg">     attitude/phi-deg             </property>
+    <property caption="hdg_cmd_rad"> guidance/specified-heading-rad </property>
+    <property caption="alt_cmd_ft">  ap/altitude_setpoint         </property>
+  </output>
+
+  <run start="0.0" end="100" dt="0.008333333333">
+
+    <event name="Trim and engage">
+      <condition> simulation/sim-time-sec ge 1 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+      <set name="ap/altitude_setpoint" value="4000"/>
+      <set name="ap/altitude_hold" value="1"/>
+      <set name="guidance/specified-heading-rad" value="3.4907"/>  <!-- 200 deg -->
+      <set name="guidance/heading-selector-switch" value="1"/>     <!-- 1 = specified heading -->
+      <set name="ap/roll-attitude-mode" value="1"/>                <!-- 1 = roll angle hold (heading) -->
+      <set name="ap/autopilot-roll-on" value="1"/>
+      <notify/>
+    </event>
+
+    <event name="Heading 290">
+      <condition> simulation/sim-time-sec ge 15 </condition>
+      <set name="guidance/specified-heading-rad" value="5.0615"/>  <!-- 290 deg -->
+      <notify/>
+    </event>
+
+    <event name="On heading - climb">
+      <condition>
+        simulation/sim-time-sec ge 16
+        attitude/psi-deg ge 288
+        attitude/psi-deg le 292
+      </condition>
+      <set name="ap/altitude_setpoint" value="4500"/>
+      <notify>
+        <property caption="heading [deg]"> attitude/psi-deg </property>
+      </notify>
+    </event>
+
+  </run>
+</runscript>

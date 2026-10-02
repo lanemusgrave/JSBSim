@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- gnc_trainer placeholder engine (generated): zero power, so it produces no
+     thrust.  It exists only so JSBSim's trim has a throttle to adjust.  The
+     real motor+prop model is the "motor-prop" <system> in gnc_trainer.xml. -->
+<electric_engine name="gnc_dummy_motor">
+  <power unit="WATTS"> 0.0 </power>
+</electric_engine>

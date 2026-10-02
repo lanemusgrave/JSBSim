@@ -1,0 +1,377 @@
+From e67052081c6c1ff1db164455399246fb40e87517 Mon Sep 17 00:00:00 2001
+From: JSBSim GNC Lab <gnc-lab@example.invalid>
+Date: Fri, 2 Oct 2026 01:30:56 +0000
+Subject: [PATCH] Add <moving_average> FCS component
+
+A boxcar filter over the last N executions of its channel:
+
+  <moving_average name="fcs/q-avg">
+    <input> velocities/q-rad_sec </input>
+    <samples> 12 </samples>
+  </moving_average>
+
+The buffer is primed with the current input on run_ic()/reset, so the
+filter starts in steady state. Includes tests/TestMovingAverage.py.
+---
+ src/models/FGFCS.cpp                          |   3 +
+ src/models/flight_control/CMakeLists.txt      |   6 +-
+ src/models/flight_control/FGFCSComponent.cpp  |   2 +
+ src/models/flight_control/FGMovingAverage.cpp | 108 ++++++++++++++++++
+ src/models/flight_control/FGMovingAverage.h   |  66 +++++++++++
+ tests/CMakeLists.txt                          |   3 +-
+ tests/TestMovingAverage.py                    |  57 +++++++++
+ tests/moving_average.xml                      |  18 +++
+ 8 files changed, 260 insertions(+), 3 deletions(-)
+ create mode 100644 src/models/flight_control/FGMovingAverage.cpp
+ create mode 100644 src/models/flight_control/FGMovingAverage.h
+ create mode 100644 tests/TestMovingAverage.py
+ create mode 100644 tests/moving_average.xml
+
+diff --git a/src/models/FGFCS.cpp b/src/models/FGFCS.cpp
+index 5396746..61f12f9 100644
+--- a/src/models/FGFCS.cpp
++++ b/src/models/FGFCS.cpp
+@@ -46,6 +46,7 @@ INCLUDES
+ 
+ #include "models/flight_control/FGFilter.h"
+ #include "models/flight_control/FGDeadBand.h"
++#include "models/flight_control/FGMovingAverage.h"
+ #include "models/flight_control/FGGain.h"
+ #include "models/flight_control/FGPID.h"
+ #include "models/flight_control/FGSwitch.h"
+@@ -595,6 +596,8 @@ bool FGFCS::Load(Element* document)
+           newChannel->Add(new FGDistributor(this, component_element));
+         } else if (component_element->GetName() == string("linear_actuator")) {
+           newChannel->Add(new FGLinearActuator(this, component_element));
++        } else if (component_element->GetName() == string("moving_average")) {
++          newChannel->Add(new FGMovingAverage(this, component_element));
+         } else {
+           FGXMLLogging log(component_element, LogLevel::ERROR);
+           log << "Unknown FCS component: " << component_element->GetName() << endl;
+diff --git a/src/models/flight_control/CMakeLists.txt b/src/models/flight_control/CMakeLists.txt
+index a7331ee..3790684 100644
+--- a/src/models/flight_control/CMakeLists.txt
++++ b/src/models/flight_control/CMakeLists.txt
+@@ -15,7 +15,8 @@ set(SOURCES FGDeadBand.cpp
+             FGAngles.cpp
+             FGWaypoint.cpp
+             FGDistributor.cpp
+-            FGLinearActuator.cpp)
++            FGLinearActuator.cpp
++            FGMovingAverage.cpp)
+ 
+ set(HEADERS FGDeadBand.h
+             FGFCSComponent.h
+@@ -35,7 +36,8 @@ set(HEADERS FGDeadBand.h
+             FGAngles.h
+             FGWaypoint.h
+             FGDistributor.h
+-            FGLinearActuator.h)
++            FGLinearActuator.h
++            FGMovingAverage.h)
+ 
+ add_library(FlightControl OBJECT ${SOURCES})
+ 
+diff --git a/src/models/flight_control/FGFCSComponent.cpp b/src/models/flight_control/FGFCSComponent.cpp
+index 4325ae9..a3ff36e 100644
+--- a/src/models/flight_control/FGFCSComponent.cpp
++++ b/src/models/flight_control/FGFCSComponent.cpp
+@@ -105,6 +105,8 @@ FGFCSComponent::FGFCSComponent(FGFCS* _fcs, Element* element) : fcs(_fcs)
+     Type = "ANGLE";
+   } else if (element->GetName() == string("distributor")) {
+     Type = "DISTRIBUTOR";
++  } else if (element->GetName() == string("moving_average")) {
++    Type = "MOVING_AVERAGE";
+   } else { // illegal component in this channel
+     Type = "UNKNOWN";
+   }
+diff --git a/src/models/flight_control/FGMovingAverage.cpp b/src/models/flight_control/FGMovingAverage.cpp
+new file mode 100644
+index 0000000..6fa2cec
+--- /dev/null
++++ b/src/models/flight_control/FGMovingAverage.cpp
+@@ -0,0 +1,108 @@
++/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++ Module:       FGMovingAverage.cpp
++ Date started: 2026
++
++ This program is free software; you can redistribute it and/or modify it under
++ the terms of the GNU Lesser General Public License as published by the Free
++ Software Foundation; either version 2 of the License, or (at your option) any
++ later version.
++
++ This program is distributed in the hope that it will be useful, but WITHOUT
++ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++ FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
++ details.
++
++%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
++
++#include <numeric>
++
++#include "FGMovingAverage.h"
++#include "models/FGFCS.h"
++#include "input_output/FGXMLElement.h"
++#include "input_output/FGLog.h"
++
++using namespace std;
++
++namespace JSBSim {
++
++FGMovingAverage::FGMovingAverage(FGFCS* fcs, Element* element)
++  : FGFCSComponent(fcs, element)
++{
++  CheckInputNodes(1, 1, element);
++
++  double n = 1.0;
++  if (element->FindElement("samples"))
++    n = element->FindElementValueAsNumber("samples");
++  if (n < 1.0) {
++    XMLLogException err(element);
++    err << "moving_average " << Name << ": <samples> must be >= 1\n";
++    throw err;
++  }
++  buffer.assign(static_cast<size_t>(n), 0.0);
++
++  bind(element, fcs->GetPropertyManager().get());
++  Debug(0);
++}
++
++//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++FGMovingAverage::~FGMovingAverage()
++{
++  Debug(1);
++}
++
++//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++void FGMovingAverage::ResetPastStates(void)
++{
++  FGFCSComponent::ResetPastStates();
++  primed = false;
++  next = 0;
++}
++
++//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++bool FGMovingAverage::Run(void)
++{
++  Input = InputNodes[0]->getDoubleValue();
++
++  if (!primed) {                       // start at steady state: no start-up transient
++    buffer.assign(buffer.size(), Input);
++    primed = true;
++  }
++  buffer[next] = Input;
++  next = (next + 1) % buffer.size();
++
++  // Summing the whole (short) window each frame avoids the round-off drift of
++  // a running sum.
++  Output = accumulate(buffer.begin(), buffer.end(), 0.0) / buffer.size();
++
++  Clip();
++  SetOutput();
++
++  return true;
++}
++
++//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++void FGMovingAverage::Debug(int from)
++{
++  if (debug_lvl <= 0) return;
++
++  if (debug_lvl & 1) { // Standard console startup message output
++    if (from == 0) { // Constructor
++      FGLogging log(LogLevel::DEBUG);
++      log << "      INPUT: " << InputNodes[0]->GetName() << "\n";
++      log << "      SAMPLES: " << buffer.size() << "\n";
++      for (auto node: OutputNodes)
++        log << "      OUTPUT: " << node->getNameString() << "\n";
++    }
++  }
++  if (debug_lvl & 2 ) { // Instantiation/Destruction notification
++    FGLogging log(LogLevel::DEBUG);
++    if (from == 0) log << "Instantiated: FGMovingAverage\n";
++    if (from == 1) log << "Destroyed:    FGMovingAverage\n";
++  }
++}
++}
+diff --git a/src/models/flight_control/FGMovingAverage.h b/src/models/flight_control/FGMovingAverage.h
+new file mode 100644
+index 0000000..e13aa0e
+--- /dev/null
++++ b/src/models/flight_control/FGMovingAverage.h
+@@ -0,0 +1,66 @@
++/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
++
++ Header:       FGMovingAverage.h
++ Date started: 2026
++
++ This program is free software; you can redistribute it and/or modify it under
++ the terms of the GNU Lesser General Public License as published by the Free
++ Software Foundation; either version 2 of the License, or (at your option) any
++ later version.
++
++ This program is distributed in the hope that it will be useful, but WITHOUT
++ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++ FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
++ details.
++
++%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
++
++#ifndef FGMOVINGAVERAGE_H
++#define FGMOVINGAVERAGE_H
++
++#include <vector>
++
++#include "FGFCSComponent.h"
++
++namespace JSBSim {
++
++class FGFCS;
++class Element;
++
++/** Moving-average (boxcar) filter: the output is the mean of the last N
++    inputs, one sample per execution of the component's channel.
++
++    @code
++    <moving_average name="fcs/q-avg">
++      <input> {[-]property name} </input>
++      <samples> {integer >= 1} </samples>
++      [<clipto>
++        <min> {[-]property name | value} </min>
++        <max> {[-]property name | value} </max>
++      </clipto>]
++      [<output> {property} </output>]
++    </moving_average>
++    @endcode
++
++    A boxcar of N samples has a pure delay of (N-1)/2 samples and its first
++    spectral null at 1/(N dt).  After a reset (e.g. run_ic()) the buffer is
++    filled with the first input, so the filter starts without a transient.
++*/
++class FGMovingAverage : public FGFCSComponent
++{
++public:
++  FGMovingAverage(FGFCS* fcs, Element* element);
++  ~FGMovingAverage();
++
++  bool Run(void) override;
++  void ResetPastStates(void) override;
++
++private:
++  std::vector<double> buffer;
++  size_t next = 0;
++  bool primed = false;
++
++  void Debug(int from) override;
++};
++}
++#endif
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 96e4d08..f37049c 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -55,7 +55,8 @@ set(PYTHON_TESTS ResetOutputFiles
+                  TestLighterThanAir
+                  TestUnusableFuel
+                  TestSensorRandomSeed
+-                 TestPQRdot)
++                 TestPQRdot
++                 TestMovingAverage)
+ 
+ foreach(test ${PYTHON_TESTS})
+   add_test(NAME ${test}
+diff --git a/tests/TestMovingAverage.py b/tests/TestMovingAverage.py
+new file mode 100644
+index 0000000..9efd4fb
+--- /dev/null
++++ b/tests/TestMovingAverage.py
+@@ -0,0 +1,57 @@
++# TestMovingAverage.py
++#
++# Test the <moving_average> flight control component.
++#
++# This program is free software; you can redistribute it and/or modify it under
++# the terms of the GNU General Public License as published by the Free Software
++# Foundation; either version 3 of the License, or (at your option) any later
++# version.
++#
++# This program is distributed in the hope that it will be useful, but WITHOUT
++# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
++# details.
++#
++# You should have received a copy of the GNU General Public License along with
++# this program; if not, see <http://www.gnu.org/licenses/>
++#
++
++from JSBSim_utils import JSBSimTestCase, RunTest, FlightModel
++
++
++class TestMovingAverage(JSBSimTestCase):
++    def test_boxcar(self):
++        tripod = FlightModel(self, 'tripod')
++        tripod.include_system_test_file('moving_average.xml')
++        fdm = tripod.start()            # run_ic() primes the buffers with 0.0
++
++        history = [0.0]*4
++        for i in range(12):
++            v = 3.0 if i % 2 else float(i)
++            fdm['test/input'] = v
++            fdm.run()
++            history = history[1:] + [v]
++            self.assertAlmostEqual(fdm['test/avg-4'], sum(history)/4.0)
++            self.assertAlmostEqual(fdm['test/avg-1'], v)
++            self.assertAlmostEqual(fdm['test/avg-clipped'],
++                                   max(-1.0, min(1.0, sum(history)/4.0)))
++
++    def test_reset_forgets_past_samples(self):
++        tripod = FlightModel(self, 'tripod')
++        tripod.include_system_test_file('moving_average.xml')
++        fdm = tripod.start()
++        for _ in range(5):
++            fdm['test/input'] = 10.0
++            fdm.run()
++        self.assertAlmostEqual(fdm['test/avg-4'], 10.0)
++        # Reset re-runs the IC: declared properties return to their defaults
++        # (test/input = 0) and the buffer is re-primed with that value.
++        fdm.reset_to_initial_conditions(0)
++        self.assertAlmostEqual(fdm['test/avg-4'], 0.0)
++        fdm['test/input'] = -2.0
++        fdm.run()
++        # no trace of the 10.0 samples: [0, 0, 0, -2] / 4
++        self.assertAlmostEqual(fdm['test/avg-4'], -0.5)
++
++
++RunTest(TestMovingAverage)
+diff --git a/tests/moving_average.xml b/tests/moving_average.xml
+new file mode 100644
+index 0000000..4cf87ff
+--- /dev/null
++++ b/tests/moving_average.xml
+@@ -0,0 +1,18 @@
++<system>
++  <property>test/input</property>
++  <channel name="test">
++    <moving_average name="test/avg-4">
++      <input>test/input</input>
++      <samples>4</samples>
++    </moving_average>
++    <moving_average name="test/avg-1">
++      <input>test/input</input>
++      <samples>1</samples>
++    </moving_average>
++    <moving_average name="test/avg-clipped">
++      <input>test/input</input>
++      <samples>4</samples>
++      <clipto> <min>-1.0</min> <max>1.0</max> </clipto>
++    </moving_average>
++  </channel>
++</system>
+-- 
+2.43.0
+

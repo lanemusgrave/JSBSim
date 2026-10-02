@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<!--
+  Module 17: test rig for the <moving_average> component added in the fork.
+
+  rig/input = step of 1.0 at t = 0.5 s + 0.2 sin(2 pi 10 t)  (a "10 Hz vibration")
+  rig/avg   = 12-sample moving average.  At 120 Hz, 12 samples span exactly one
+              period of 10 Hz, so the vibration is removed completely (a spectral
+              null at 1/(N dt) = 10 Hz) and the step becomes a 0.1 s ramp.
+
+  Needs a JSBSim built from the patched fork: stock JSBSim reports
+  "Unknown FCS component: moving_average".
+-->
+<fdm_config name="m17_rig" version="2.0" release="ALPHA">
+  <fileheader> <author> JSBSim GNC Lab </author> <description> moving_average test rig </description> </fileheader>
+  <metrics>
+    <wingarea unit="FT2"> 1 </wingarea> <wingspan unit="FT"> 1 </wingspan> <chord unit="FT"> 1 </chord>
+    <location name="AERORP" unit="IN"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </metrics>
+  <mass_balance>
+    <ixx unit="SLUG*FT2"> 10 </ixx> <iyy unit="SLUG*FT2"> 10 </iyy> <izz unit="SLUG*FT2"> 10 </izz>
+    <emptywt unit="LBS"> 1000 </emptywt>
+    <location name="CG" unit="IN"> <x> 0 </x> <y> 0 </y> <z> 0 </z> </location>
+  </mass_balance>
+  <ground_reactions/>
+  <propulsion/>
+
+  <system name="rig">
+    <channel name="Signal">
+      <fcs_function name="rig/input">
+        <function>
+          <sum>
+            <ifthen>
+              <ge> <property> simulation/sim-time-sec </property> <value> 0.5 </value> </ge>
+              <value> 1.0 </value>
+              <value> 0.0 </value>
+            </ifthen>
+            <product>
+              <value> 0.2 </value>
+              <sin> <product> <value> 62.8318530718 </value> <property> simulation/sim-time-sec </property> </product> </sin>
+            </product>
+          </sum>
+        </function>
+      </fcs_function>
+    </channel>
+    <channel name="Filter">
+      <moving_average name="rig/avg">
+        <input> rig/input </input>
+        <samples> 12 </samples>
+      </moving_average>
+    </channel>
+  </system>
+
+  <aerodynamics>   <!-- a dummy drag term: JSBSim requires an aerodynamics section -->
+    <axis name="DRAG">
+      <function name="aero/force/D">
+        <product> <property> aero/qbar-psf </property> <value> 0.0 </value> </product>
+      </function>
+    </axis>
+  </aerodynamics>
+
+  <output name="m17_rig.csv" type="CSV" rate="120">
+    <property> rig/input </property>
+    <property> rig/avg </property>
+  </output>
+</fdm_config>

@@ -1,0 +1,264 @@
+<?xml version="1.0"?>
+<!--
+  gnc_trainer autopilot - reference solution, built up over Modules 09-12.
+
+  Inputs : fb/... feedback signals from Systems/gnc_sensors.xml (truth or sensed)
+  Outputs: ap/elevator-cmd-norm, ap/aileron-cmd-norm, ap/rudder-cmd-norm,
+           ap/throttle-cmd-norm - INCREMENTS added to the trimmed pilot/trim
+           commands by the airframe's <flight_control>.
+
+  Engage with gnclab.autopilot (bumpless: captures the current state as the
+  reference).  All loops default to OFF, so trim and linearization see the bare
+  airframe.  Gains were designed in modules/09_longitudinal_autopilot/solutions/
+  design_longitudinal.py at 25 m/s.
+-->
+<system name="gnc_autopilot">
+
+  <!-- ===================== LONGITUDINAL (Module 09) ===================== -->
+  <property value="0">     ap/pitch-hold-on </property>    <!-- inner loop: theta -> elevator -->
+  <property value="0">     ap/alt-hold-on </property>      <!-- outer loop: altitude -> theta_c -->
+  <property value="0">     ap/speed-hold-on </property>    <!-- airspeed -> throttle -->
+  <property value="0">     ap/theta-trim-rad </property>   <!-- theta at engagement (bias) -->
+  <property value="0">     ap/theta-cmd-ext-rad </property><!-- manual theta increment when alt hold is off -->
+  <property value="330">   ap/alt-cmd-ft </property>
+  <property value="82.02"> ap/vt-cmd-fps </property>
+  <property value="0.2618"> ap/theta-max-rad </property>   <!-- +/- 15 deg about trim -->
+  <property value="60">    ap/alt-zone-ft </property>      <!-- integrate only inside this band -->
+
+  <property value="-3.81972">   ap/gains/kp-theta </property>   <!-- elevator norm per rad -->
+  <property value="-0.895563">  ap/gains/kd-theta </property>   <!-- elevator norm per rad/s -->
+  <property value="0.010291">   ap/gains/kp-h </property>       <!-- rad per ft -->
+  <property value="0.00070766"> ap/gains/ki-h </property>       <!-- rad per ft*s -->
+  <property value="0.01127">    ap/gains/kp-v </property>       <!-- throttle per ft/s -->
+  <property value="0.00406191"> ap/gains/ki-v </property>       <!-- throttle per ft -->
+
+  <channel name="Altitude hold">
+    <summer name="ap/alt-error-ft">
+      <input> ap/alt-cmd-ft </input>
+      <input> -fb/h-ft </input>
+    </summer>
+    <!-- Anti-windup trigger for the altitude integrator:
+           -1 (reset) when altitude hold is off, +1 (freeze) outside the capture zone
+           or when theta_c is saturated, 0 (integrate) otherwise. -->
+    <fcs_function name="ap/alt-int-trigger">
+      <function>
+        <ifthen>
+          <eq> <property> ap/alt-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <or>
+              <gt> <abs> <property> ap/alt-error-ft </property> </abs> <property> ap/alt-zone-ft </property> </gt>
+              <gt> <abs> <property> ap/theta-cmd-incr-raw </property> </abs> <property> ap/theta-max-rad </property> </gt>
+            </or>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/alt-pi">
+      <input> ap/alt-error-ft </input>
+      <kp> ap/gains/kp-h </kp>
+      <ki type="trap"> ap/gains/ki-h </ki>
+      <trigger> ap/alt-int-trigger </trigger>
+    </pid>
+    <switch name="ap/theta-cmd-incr-raw">          <!-- theta command relative to trim -->
+      <default value="ap/theta-cmd-ext-rad"/>
+      <test value="ap/alt-pi"> ap/alt-hold-on == 1 </test>
+    </switch>
+    <fcs_function name="ap/theta-cmd-rad">         <!-- theta_trim + clip(increment) -->
+      <function>
+        <sum>
+          <property> ap/theta-trim-rad </property>
+          <max>
+            <product> <value> -1 </value> <property> ap/theta-max-rad </property> </product>
+            <min> <property> ap/theta-cmd-incr-raw </property> <property> ap/theta-max-rad </property> </min>
+          </max>
+        </sum>
+      </function>
+    </fcs_function>
+  </channel>
+
+  <channel name="Pitch hold">
+    <summer name="ap/theta-error-rad">
+      <input> ap/theta-cmd-rad </input>
+      <input> -fb/theta-rad </input>
+    </summer>
+    <pure_gain name="ap/de-p">  <input> ap/theta-error-rad </input> <gain> ap/gains/kp-theta </gain> </pure_gain>
+    <pure_gain name="ap/de-d">  <input> fb/q-rad_sec </input>        <gain> ap/gains/kd-theta </gain> </pure_gain>
+    <summer name="ap/de-cmd">   <!-- de = kp (th_c - th) - kd q  (gains are negative for this airframe) -->
+      <input> ap/de-p </input>
+      <input> -ap/de-d </input>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </summer>
+    <switch name="ap/elevator-out">
+      <default value="0"/>
+      <test value="ap/de-cmd"> ap/pitch-hold-on == 1 </test>
+      <output> ap/elevator-cmd-norm </output>
+    </switch>
+  </channel>
+
+  <channel name="Airspeed hold">
+    <summer name="ap/vt-error-fps">
+      <input> ap/vt-cmd-fps </input>
+      <input> -fb/vt-fps </input>
+    </summer>
+    <!-- freeze the integrator when the TOTAL throttle (trim + autopilot) saturates -->
+    <fcs_function name="ap/speed-int-trigger">
+      <function>
+        <ifthen>
+          <eq> <property> ap/speed-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <or>
+              <gt> <sum> <property> fcs/throttle-pos-norm </property> <property> ap/speed-pi </property> </sum> <value> 1 </value> </gt>
+              <lt> <sum> <property> fcs/throttle-pos-norm </property> <property> ap/speed-pi </property> </sum> <value> 0 </value> </lt>
+            </or>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/speed-pi">
+      <input> ap/vt-error-fps </input>
+      <kp> ap/gains/kp-v </kp>
+      <ki type="trap"> ap/gains/ki-v </ki>
+      <trigger> ap/speed-int-trigger </trigger>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </pid>
+    <switch name="ap/throttle-out">
+      <default value="0"/>
+      <test value="ap/speed-pi"> ap/speed-hold-on == 1 </test>
+      <output> ap/throttle-cmd-norm </output>
+    </switch>
+  </channel>
+
+  <!-- ===================== LATERAL-DIRECTIONAL (Module 10) ===================== -->
+  <property value="0">      ap/roll-hold-on </property>     <!-- inner loop: phi -> aileron -->
+  <property value="0">      ap/course-hold-on </property>   <!-- outer loop: course -> phi_c -->
+  <property value="0">      ap/yaw-damper-on </property>
+  <property value="0">      ap/phi-cmd-ext-rad </property>  <!-- manual bank command when course hold is off -->
+  <property value="0">      ap/chi-cmd-rad </property>
+  <property value="0.5236"> ap/phi-max-rad </property>      <!-- +/- 30 deg -->
+
+  <property value="1.43239">  ap/gains/kp-phi </property>   <!-- aileron norm per rad -->
+  <property value="0">        ap/gains/kd-phi </property>   <!-- airframe roll damping is enough -->
+  <property value="2.70632">  ap/gains/kp-chi </property>   <!-- rad bank per rad course error -->
+  <property value="0.319224"> ap/gains/ki-chi </property>
+  <property value="0.23">     ap/gains/kr-yaw </property>   <!-- rudder norm per rad/s (washed out) -->
+  <property value="1">        ap/gains/washout-c1 </property>
+
+  <!-- ===================== GUIDANCE (Module 12) =====================
+       XML "direct-to" guidance with JSBSim's waypoint components (RM case study
+       "Modeling a waypoint navigation system").  When ap/guidance-on = 1 the course
+       command is the great-circle bearing to the target.  Path-following
+       guidance (vector fields, waypoint sequencing) lives in Python:
+       gnclab.guidance. -->
+  <property value="0"> ap/guidance-on </property>
+  <property value="0"> guidance/target-lat-rad </property>
+  <property value="0"> guidance/target-lon-rad </property>
+
+  <channel name="Direct-to guidance">
+    <waypoint_heading name="guidance/wp-heading-rad" unit="RAD">
+      <target_latitude unit="RAD">  guidance/target-lat-rad </target_latitude>
+      <target_longitude unit="RAD"> guidance/target-lon-rad </target_longitude>
+      <source_latitude unit="RAD">  position/lat-geod-rad </source_latitude>
+      <source_longitude unit="RAD"> position/long-gc-rad </source_longitude>
+    </waypoint_heading>
+    <waypoint_distance name="guidance/wp-distance-m" unit="M">
+      <target_latitude unit="RAD">  guidance/target-lat-rad </target_latitude>
+      <target_longitude unit="RAD"> guidance/target-lon-rad </target_longitude>
+      <source_latitude unit="RAD">  position/lat-geod-rad </source_latitude>
+      <source_longitude unit="RAD"> position/long-gc-rad </source_longitude>
+    </waypoint_distance>
+    <!-- When guidance is off, pass the course command through unchanged (a
+         switch always writes its output, so it must default to the current value). -->
+    <switch name="guidance/chi-cmd-select">
+      <default value="ap/chi-cmd-rad"/>
+      <test value="guidance/wp-heading-rad"> ap/guidance-on == 1 </test>
+      <output> ap/chi-cmd-rad </output>
+    </switch>
+  </channel>
+
+  <channel name="Course hold">
+    <!-- wrap the course error to [-pi, pi]: atan2(sin e, cos e) -->
+    <fcs_function name="ap/chi-error-rad">
+      <function>
+        <atan2>
+          <sin> <difference> <property> ap/chi-cmd-rad </property> <property> fb/chi-rad </property> </difference> </sin>
+          <cos> <difference> <property> ap/chi-cmd-rad </property> <property> fb/chi-rad </property> </difference> </cos>
+        </atan2>
+      </function>
+    </fcs_function>
+    <fcs_function name="ap/chi-int-trigger">     <!-- -1 reset when off; +1 freeze while bank is saturated -->
+      <function>
+        <ifthen>
+          <eq> <property> ap/course-hold-on </property> <value> 0 </value> </eq>
+          <value> -1 </value>
+          <ifthen>
+            <gt> <abs> <property> ap/phi-cmd-raw </property> </abs> <property> ap/phi-max-rad </property> </gt>
+            <value> 1 </value>
+            <value> 0 </value>
+          </ifthen>
+        </ifthen>
+      </function>
+    </fcs_function>
+    <pid name="ap/chi-pi">
+      <input> ap/chi-error-rad </input>
+      <kp> ap/gains/kp-chi </kp>
+      <ki type="trap"> ap/gains/ki-chi </ki>
+      <trigger> ap/chi-int-trigger </trigger>
+    </pid>
+    <switch name="ap/phi-cmd-raw">
+      <default value="ap/phi-cmd-ext-rad"/>
+      <test value="ap/chi-pi"> ap/course-hold-on == 1 </test>
+    </switch>
+    <fcs_function name="ap/phi-cmd-rad">
+      <function>
+        <max>
+          <product> <value> -1 </value> <property> ap/phi-max-rad </property> </product>
+          <min> <property> ap/phi-cmd-raw </property> <property> ap/phi-max-rad </property> </min>
+        </max>
+      </function>
+    </fcs_function>
+  </channel>
+
+  <channel name="Roll hold">
+    <summer name="ap/phi-error-rad">
+      <input> ap/phi-cmd-rad </input>
+      <input> -fb/phi-rad </input>
+    </summer>
+    <pure_gain name="ap/da-p"> <input> ap/phi-error-rad </input> <gain> ap/gains/kp-phi </gain> </pure_gain>
+    <pure_gain name="ap/da-d"> <input> fb/p-rad_sec </input>     <gain> ap/gains/kd-phi </gain> </pure_gain>
+    <summer name="ap/da-cmd">
+      <input> ap/da-p </input>
+      <input> -ap/da-d </input>
+      <clipto> <min> -1 </min> <max> 1 </max> </clipto>
+    </summer>
+    <switch name="ap/aileron-out">
+      <default value="0"/>
+      <test value="ap/da-cmd"> ap/roll-hold-on == 1 </test>
+      <output> ap/aileron-cmd-norm </output>
+    </switch>
+  </channel>
+
+  <channel name="Yaw damper">
+    <!-- washout: damps the Dutch roll but does not fight the steady yaw rate of a turn -->
+    <washout_filter name="ap/r-washed">
+      <input> fb/r-rad_sec </input>
+      <c1> ap/gains/washout-c1 </c1>
+    </washout_filter>
+    <pure_gain name="ap/dr-cmd">
+      <input> ap/r-washed </input>
+      <gain> ap/gains/kr-yaw </gain>
+      <clipto> <min> -0.5 </min> <max> 0.5 </max> </clipto>
+    </pure_gain>
+    <switch name="ap/rudder-out">
+      <default value="0"/>
+      <test value="ap/dr-cmd"> ap/yaw-damper-on == 1 </test>
+      <output> ap/rudder-cmd-norm </output>
+    </switch>
+  </channel>
+
+</system>
