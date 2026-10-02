@@ -4,7 +4,7 @@ You need three things: **Python 3.10+**, **Git**, and an editor. JSBSim itself
 comes from `pip` as a prebuilt package (`jsbsim==1.3.1`). That package includes
 the C++ flight dynamics engine, the Python bindings, the `jsbsim` command-line
 program and about 60 aircraft models. You do **not** need a C++ compiler until
-Module 17.
+Module 17 (then see [source_build.md](source_build.md)).
 
 - [Windows 10 (primary)](#windows-10-primary)
 - [WSL2 / Linux / macOS](#wsl2--linux--macos)
@@ -72,7 +72,7 @@ python modules\00_setup\solutions\first_flight.py --show
 
 WSL2 gives you a real Ubuntu on your Windows 10 machine. GNC teams often run
 Linux, and WSL2 is also the recommended route for building JSBSim from source
-in Module 17.
+in Module 17 ([source_build.md](source_build.md)).
 
 ```powershell
 # Windows 10 version 2004+ : in an *administrator* PowerShell, then reboot
