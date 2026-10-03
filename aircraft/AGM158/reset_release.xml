@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<initialize name="AGM-158B air release, wings unfolding">
+  <!-- Typical bomber release: 25,000 ft, Mach 0.75, nose slightly down. -->
+  <latitude unit="DEG">   32.4 </latitude>
+  <longitude unit="DEG"> -99.8 </longitude>
+  <altitude unit="FT"> 25000.0 </altitude>
+  <vt unit="FT/SEC">     780.0 </vt>
+  <alpha unit="DEG">       1.5 </alpha>
+  <gamma unit="DEG">      -2.0 </gamma>
+  <phi unit="DEG">         0.0 </phi>
+  <psi unit="DEG">        90.0 </psi>
+  <running>               -1   </running>
+</initialize>

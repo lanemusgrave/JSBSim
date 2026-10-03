@@ -1,0 +1,773 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="http://jsbsim.sourceforge.net/JSBSim.xsl"?>
+<fdm_config name="BGM-109 Tomahawk" version="2.0" release="ALPHA"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="http://jsbsim.sourceforge.net/JSBSim.xsd">
+
+  <fileheader>
+    <author>JSBSim engineering approximation from open sources</author>
+    <filecreationdate>2026-10-03</filecreationdate>
+    <version>1.0</version>
+    <description>
+      BGM-109 Tomahawk land-attack cruise missile, cruise configuration
+      (wings and ventral inlet deployed) with an optional solid booster
+      for the launch transient.
+
+      Published anchors used (GlobalSecurity / FAS / Wikipedia / Williams):
+        length 18.25 ft (no booster), 20.5 ft with booster
+        diameter 20.4 in, wingspan 8.75 ft
+        missile weight ~2900 lb, ~3500 lb with booster
+        fuel ~900 lb of the Block III class
+        F107-WR-402 700 lbf SL static, BPR 1, TSFC 0.683 lb/lbf/hr
+        cruise ~Mach 0.72-0.74, terrain following ~50-250 ft
+        Atlantic Research booster ~6000 lbf for ~12 s
+
+      Wing area, inertias, and stability derivatives are estimates.
+      They are sized so the missile trims near Mach 0.72 on about 600 lbf
+      and has a fuel fraction consistent with a ~1000 nm Block III leg.
+      Not a flight-test or contractor aero database.
+    </description>
+    <reference refID="GS" author="GlobalSecurity" title="BGM-109 specifications"/>
+    <reference refID="WI" author="Williams / Wikipedia" title="F107-WR-402"/>
+  </fileheader>
+
+  <!--
+    Structural frame used by location elements: origin at the nose,
+    X aft, Y right, Z up. Body-axis forces remain X forward, Z down.
+  -->
+  <metrics>
+    <wingarea unit="FT2"> 13.0 </wingarea>
+    <wingspan unit="FT">   8.75 </wingspan>
+    <chord unit="FT">      1.486 </chord>
+    <htailarea unit="FT2"> 2.4 </htailarea>
+    <htailarm unit="FT">   7.5 </htailarm>
+    <vtailarea unit="FT2"> 2.4 </vtailarea>
+    <vtailarm unit="FT">   7.5 </vtailarm>
+    <location name="AERORP" unit="IN">
+      <x>108</x>
+      <y>0</y>
+      <z>0</z>
+    </location>
+    <location name="EYEPOINT" unit="IN">
+      <x>20</x>
+      <y>0</y>
+      <z>0</z>
+    </location>
+    <location name="VRP" unit="IN">
+      <x>0</x>
+      <y>0</y>
+      <z>0</z>
+    </location>
+  </metrics>
+
+  <mass_balance>
+    <ixx unit="SLUG*FT2"> 55 </ixx>
+    <iyy unit="SLUG*FT2"> 2100 </iyy>
+    <izz unit="SLUG*FT2"> 2100 </izz>
+    <ixy unit="SLUG*FT2"> 0 </ixy>
+    <ixz unit="SLUG*FT2"> 0 </ixz>
+    <iyz unit="SLUG*FT2"> 0 </iyz>
+    <emptywt unit="LBS"> 1950 </emptywt>
+    <location name="CG" unit="IN">
+      <x>105</x>
+      <y>0</y>
+      <z>0</z>
+    </location>
+    <!-- Booster case + propellant. Weight is written to 550 by the launch
+         script and back to 0 at burnout / separation. Cruise starts at 0. -->
+    <pointmass name="booster">
+      <weight unit="LBS"> 0 </weight>
+      <location unit="IN">
+        <x>232</x>
+        <y>0</y>
+        <z>0</z>
+      </location>
+    </pointmass>
+  </mass_balance>
+
+  <ground_reactions>
+    <!-- Belly contact so a ground strike does not NaN the integrator.
+         Not a launch rail. -->
+    <contact type="STRUCTURE" name="BELLY">
+      <location unit="IN">
+        <x>110</x>
+        <y>0</y>
+        <z>-12</z>
+      </location>
+      <static_friction> 0.4 </static_friction>
+      <dynamic_friction> 0.3 </dynamic_friction>
+      <rolling_friction> 0.3 </rolling_friction>
+      <spring_coeff unit="LBS/FT"> 8000 </spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC"> 2000 </damping_coeff>
+      <max_steer unit="DEG"> 0 </max_steer>
+      <brake_group> NONE </brake_group>
+      <retractable> 0 </retractable>
+    </contact>
+  </ground_reactions>
+
+  <propulsion>
+    <engine file="F107-WR-402" name="F107">
+      <feed> 0 </feed>
+      <thruster file="direct">
+        <location unit="IN">
+          <x>210</x>
+          <y>0</y>
+          <z>-2</z>
+        </location>
+        <orient unit="DEG">
+          <roll> 0 </roll>
+          <pitch> 0 </pitch>
+          <yaw> 0 </yaw>
+        </orient>
+      </thruster>
+    </engine>
+    <!-- ~900 lb usable. JP-10 in the real missile; modeled as Jet-A by weight. -->
+    <tank type="FUEL" number="0">
+      <location unit="IN">
+        <x>112</x>
+        <y>0</y>
+        <z>0</z>
+      </location>
+      <capacity unit="LBS"> 900 </capacity>
+      <contents unit="LBS"> 900 </contents>
+    </tank>
+  </propulsion>
+
+  <!--
+    Booster is an external body-axis force so burnout and separation stay
+    explicit. 6000 lbf, 12 s, Atlantic Research Mk-class solid.
+  -->
+  <external_reactions>
+    <force name="booster" frame="BODY">
+      <function>
+        <product>
+          <property>fcs/booster-command</property>
+          <value>6000.0</value>
+        </product>
+      </function>
+      <location unit="IN">
+        <x>232</x>
+        <y>0</y>
+        <z>0</z>
+      </location>
+      <direction>
+        <x>1</x>
+        <y>0</y>
+        <z>0</z>
+      </direction>
+    </force>
+  </external_reactions>
+
+  <flight_control name="FCS">
+
+    <channel name="Launch and configuration">
+      <!-- 1 = surface/subsurface launch sequence. Set before run_ic. -->
+      <fcs_function name="fcs/launch-mode">
+        <function>
+          <property>fcs/launch-mode</property>
+        </function>
+      </fcs_function>
+
+      <switch name="fcs/booster-on">
+        <default value="0.0"/>
+        <test logic="AND" value="1.0">
+          fcs/launch-mode GT 0.5
+          simulation/sim-time-sec LT 12.0
+        </test>
+      </switch>
+
+      <pure_gain name="fcs/booster-command">
+        <input>fcs/booster-on</input>
+        <gain>1.0</gain>
+      </pure_gain>
+
+      <!-- Wings/inlet stay stowed until booster burnout, then deploy. -->
+      <switch name="fcs/wings-deployed">
+        <default value="1.0"/>
+        <test logic="AND" value="0.0">
+          fcs/launch-mode GT 0.5
+          simulation/sim-time-sec LT 12.0
+        </test>
+      </switch>
+
+      <!-- Drop the booster mass at separation. -->
+      <switch name="fcs/booster-mass-cmd">
+        <default value="0.0"/>
+        <test logic="AND" value="550.0">
+          fcs/launch-mode GT 0.5
+          simulation/sim-time-sec LT 12.0
+        </test>
+        <output>inertia/pointmass-weight-lbs</output>
+      </switch>
+    </channel>
+
+    <channel name="Guidance targets">
+      <!-- Set these before run_ic. Defaults are applied by reset_cruise
+           and the included script if the properties are still zero. -->
+      <switch name="guidance/alt-default">
+        <default value="400.0"/>
+        <test value="guidance/altitude-setpoint-ft">
+          guidance/altitude-setpoint-ft GT 1.0
+        </test>
+        <output>guidance/altitude-setpoint-ft</output>
+      </switch>
+      <switch name="guidance/mach-default">
+        <default value="0.72"/>
+        <test value="guidance/mach-setpoint">
+          guidance/mach-setpoint GT 0.2
+        </test>
+        <output>guidance/mach-setpoint</output>
+      </switch>
+      <switch name="guidance/hdg-default">
+        <default value="90.0"/>
+        <test value="guidance/heading-setpoint-deg">
+          guidance/heading-setpoint-deg GT 0.0
+        </test>
+        <output>guidance/heading-setpoint-deg</output>
+      </switch>
+    </channel>
+
+    <channel name="Pitch">
+      <summer name="fcs/altitude-error-ft">
+        <input>guidance/altitude-setpoint-ft</input>
+        <input>-position/h-sl-ft</input>
+        <clipto>
+          <min>-400</min>
+          <max>400</max>
+        </clipto>
+      </summer>
+
+      <!-- Climb command from altitude error, limited so it does not stall. -->
+      <pure_gain name="fcs/gamma-cmd-deg">
+        <input>fcs/altitude-error-ft</input>
+        <gain>0.012</gain>
+        <clipto>
+          <min>-4</min>
+          <max>4</max>
+        </clipto>
+      </pure_gain>
+
+      <summer name="fcs/gamma-error-deg">
+        <input>fcs/gamma-cmd-deg</input>
+        <input>-flight-path/gamma-deg</input>
+      </summer>
+
+      <pid name="fcs/pitch-pid">
+        <input>fcs/gamma-error-deg</input>
+        <kp>0.08</kp>
+        <ki>0.012</ki>
+        <kd>0.03</kd>
+        <!-- Hold the integrator while the booster is burning. -->
+        <trigger>fcs/booster-on</trigger>
+        <clipto>
+          <min>-0.45</min>
+          <max>0.45</max>
+        </clipto>
+      </pid>
+
+      <!-- Ballistic theta-hold while the booster is on; cruise loop after. -->
+      <summer name="fcs/boost-theta-error">
+        <input>-attitude/theta-deg</input>
+        <bias>38.0</bias>
+      </summer>
+      <pure_gain name="fcs/boost-theta-cmd">
+        <input>fcs/boost-theta-error</input>
+        <gain>0.035</gain>
+        <clipto>
+          <min>-0.4</min>
+          <max>0.4</max>
+        </clipto>
+      </pure_gain>
+      <switch name="fcs/pitch-cmd">
+        <default value="fcs/boost-theta-cmd"/>
+        <test value="fcs/pitch-pid">
+          fcs/booster-on LT 0.5
+        </test>
+      </switch>
+
+      <!-- q damper opposes pitch rate. pitch-sum is a nose-up command. -->
+      <pure_gain name="fcs/q-damper">
+        <input>velocities/q-aero-rad_sec</input>
+        <gain>-0.55</gain>
+      </pure_gain>
+
+      <summer name="fcs/pitch-sum">
+        <input>fcs/pitch-cmd</input>
+        <input>fcs/q-damper</input>
+        <clipto>
+          <min>-1.0</min>
+          <max>1.0</max>
+        </clipto>
+      </summer>
+
+      <!-- Positive elevator is trailing-edge down, so invert the nose-up command. -->
+      <aerosurface_scale name="Elevator">
+        <input>fcs/pitch-sum</input>
+        <gain>-1.0</gain>
+        <range>
+          <min>-0.35</min>
+          <max>0.35</max>
+        </range>
+        <output>fcs/elevator-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+
+    <channel name="Roll">
+      <summer name="fcs/heading-error-deg">
+        <input>guidance/heading-setpoint-deg</input>
+        <input>-attitude/psi-deg</input>
+      </summer>
+      <!-- Wrap heading error to +/- 180 deg via atan2(sin, cos). -->
+      <fcs_function name="fcs/heading-error-wrapped">
+        <function>
+          <product>
+            <value>57.2958</value>
+            <atan2>
+              <sin>
+                <product>
+                  <property>fcs/heading-error-deg</property>
+                  <value>0.0174533</value>
+                </product>
+              </sin>
+              <cos>
+                <product>
+                  <property>fcs/heading-error-deg</property>
+                  <value>0.0174533</value>
+                </product>
+              </cos>
+            </atan2>
+          </product>
+        </function>
+      </fcs_function>
+
+      <pure_gain name="fcs/bank-cmd-deg">
+        <input>fcs/heading-error-wrapped</input>
+        <gain>1.4</gain>
+        <clipto>
+          <min>-25</min>
+          <max>25</max>
+        </clipto>
+      </pure_gain>
+
+      <switch name="fcs/bank-cmd-gated">
+        <default value="0.0"/>
+        <test value="fcs/bank-cmd-deg">
+          fcs/booster-on LT 0.5
+        </test>
+      </switch>
+
+      <summer name="fcs/bank-error-deg">
+        <input>fcs/bank-cmd-gated</input>
+        <input>-attitude/phi-deg</input>
+      </summer>
+
+      <pid name="fcs/roll-pid">
+        <input>fcs/bank-error-deg</input>
+        <kp>0.035</kp>
+        <ki>0.004</ki>
+        <kd>0.012</kd>
+        <clipto>
+          <min>-0.40</min>
+          <max>0.40</max>
+        </clipto>
+      </pid>
+
+      <pure_gain name="fcs/p-damper">
+        <input>velocities/p-aero-rad_sec</input>
+        <gain>0.40</gain>
+      </pure_gain>
+
+      <summer name="fcs/roll-sum">
+        <input>fcs/roll-pid</input>
+        <input>fcs/p-damper</input>
+        <clipto>
+          <min>-1.0</min>
+          <max>1.0</max>
+        </clipto>
+      </summer>
+
+      <aerosurface_scale name="Aileron">
+        <input>fcs/roll-sum</input>
+        <gain>1.0</gain>
+        <range>
+          <min>-0.35</min>
+          <max>0.35</max>
+        </range>
+        <output>fcs/aileron-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+
+    <channel name="Yaw">
+      <pure_gain name="fcs/yaw-damper">
+        <input>velocities/r-aero-rad_sec</input>
+        <gain>0.80</gain>
+      </pure_gain>
+      <pure_gain name="fcs/beta-feedback">
+        <input>aero/beta-rad</input>
+        <gain>0.60</gain>
+      </pure_gain>
+      <summer name="fcs/yaw-sum">
+        <input>fcs/yaw-damper</input>
+        <input>fcs/beta-feedback</input>
+        <clipto>
+          <min>-1.0</min>
+          <max>1.0</max>
+        </clipto>
+      </summer>
+      <aerosurface_scale name="Rudder">
+        <input>fcs/yaw-sum</input>
+        <gain>1.0</gain>
+        <range>
+          <min>-0.35</min>
+          <max>0.35</max>
+        </range>
+        <output>fcs/rudder-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+
+    <channel name="Throttle">
+      <summer name="fcs/mach-error">
+        <input>guidance/mach-setpoint</input>
+        <input>-velocities/mach</input>
+      </summer>
+      <pid name="fcs/throttle-pid">
+        <input>fcs/mach-error</input>
+        <kp>1.2</kp>
+        <ki>0.25</ki>
+        <kd>0.0</kd>
+        <clipto>
+          <min>-0.30</min>
+          <max>0.20</max>
+        </clipto>
+      </pid>
+      <summer name="fcs/throttle-cmd-norm">
+        <input>fcs/throttle-pid</input>
+        <bias>0.86</bias>
+        <clipto>
+          <min>0.60</min>
+          <max>1.0</max>
+        </clipto>
+        <output>fcs/throttle-cmd-norm[0]</output>
+      </summer>
+    </channel>
+
+  </flight_control>
+
+  <aerodynamics>
+    <!--
+      Buildup referenced to S = 13 ft^2, c = 1.486 ft, b = 8.75 ft.
+      Wing-dependent terms are scaled by fcs/wings-deployed so the boost
+      phase is body-only. Body drag is always present.
+    -->
+
+    <axis name="LIFT">
+      <function name="aero/force/Lift_alpha">
+        <description>Wing and body lift. CLα about 4.4/rad deployed.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/alpha-rad</property>
+          <sum>
+            <value>1.4</value>
+            <product>
+              <property>fcs/wings-deployed</property>
+              <value>3.0</value>
+            </product>
+          </sum>
+        </product>
+      </function>
+      <function name="aero/force/Lift_0">
+        <description>Wing incidence, about 1 deg, deployed only.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/wings-deployed</property>
+          <value>0.08</value>
+        </product>
+      </function>
+      <function name="aero/force/Lift_elevator">
+        <description>Tail lift from elevator, per rad.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/elevator-pos-rad</property>
+          <value>0.55</value>
+        </product>
+      </function>
+      <function name="aero/force/Lift_q">
+        <description>Pitch-rate lift, per rad/s, nondim by 2V/c.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/ci2vel</property>
+          <property>velocities/q-aero-rad_sec</property>
+          <value>6.0</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="DRAG">
+      <function name="aero/force/Drag_body">
+        <description>Body, inlet and base drag. CD0 ~ 0.050 on wing area.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <value>0.040</value>
+          <table>
+            <independentVar lookup="row">velocities/mach</independentVar>
+            <tableData>
+              0.0   1.00
+              0.60  1.00
+              0.72  1.06
+              0.80  1.22
+              0.88  1.70
+              0.95  2.30
+              1.05  2.10
+            </tableData>
+          </table>
+        </product>
+      </function>
+      <function name="aero/force/Drag_wing">
+        <description>Wing profile drag, deployed only.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/wings-deployed</property>
+          <value>0.008</value>
+        </product>
+      </function>
+      <function name="aero/force/Drag_induced">
+        <description>Induced drag, K about 0.07.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/cl-squared</property>
+          <value>0.070</value>
+        </product>
+      </function>
+      <function name="aero/force/Drag_beta">
+        <description>Crossflow drag.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <abs><property>aero/beta-rad</property></abs>
+          <abs><property>aero/beta-rad</property></abs>
+          <value>0.80</value>
+        </product>
+      </function>
+      <function name="aero/force/Drag_alpha">
+        <description>Additional body crossflow with alpha.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <abs><property>aero/alpha-rad</property></abs>
+          <abs><property>aero/alpha-rad</property></abs>
+          <value>1.10</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="SIDE">
+      <function name="aero/force/Side_beta">
+        <description>Side force due to beta, body and tail.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/beta-rad</property>
+          <value>-1.6</value>
+        </product>
+      </function>
+      <function name="aero/force/Side_rudder">
+        <description>Rudder side force.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>0.40</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="ROLL">
+      <function name="aero/moment/Roll_beta">
+        <description>Dihedral effect from low wing and ventral fin.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/beta-rad</property>
+          <value>-0.12</value>
+        </product>
+      </function>
+      <function name="aero/moment/Roll_p">
+        <description>Roll damping.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/p-aero-rad_sec</property>
+          <value>-1.4</value>
+        </product>
+      </function>
+      <function name="aero/moment/Roll_r">
+        <description>Roll due to yaw rate.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/r-aero-rad_sec</property>
+          <value>0.08</value>
+        </product>
+      </function>
+      <function name="aero/moment/Roll_aileron">
+        <description>Differential tail. Positive aileron, positive roll (right wing down).</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/aileron-pos-rad</property>
+          <value>0.18</value>
+        </product>
+      </function>
+      <function name="aero/moment/Roll_rudder">
+        <description>Rudder roll coupling.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>0.03</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="PITCH">
+      <function name="aero/moment/Pitch_0">
+        <description>Nose-up bias to trim the wing-incidence lift.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <value>0.045</value>
+        </product>
+      </function>
+      <function name="aero/moment/Pitch_alpha">
+        <description>Tail contribution about AERORP. CG offset adds the rest.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/alpha-rad</property>
+          <value>-1.0</value>
+        </product>
+      </function>
+      <function name="aero/moment/Pitch_q">
+        <description>Pitch damping from cruciform tail.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/ci2vel</property>
+          <property>velocities/q-aero-rad_sec</property>
+          <value>-45.0</value>
+        </product>
+      </function>
+      <function name="aero/moment/Pitch_elevator">
+        <description>Positive elevator (TE down) is nose-down.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>fcs/elevator-pos-rad</property>
+          <value>-0.70</value>
+        </product>
+      </function>
+      <function name="aero/moment/Pitch_alpha_rate">
+        <description>Alpha-dot damping.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/ci2vel</property>
+          <property>aero/alphadot-rad_sec</property>
+          <value>-12.0</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="YAW">
+      <function name="aero/moment/Yaw_beta">
+        <description>Weathercock stability.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/beta-rad</property>
+          <value>0.40</value>
+        </product>
+      </function>
+      <function name="aero/moment/Yaw_r">
+        <description>Yaw damping.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/r-aero-rad_sec</property>
+          <value>-1.6</value>
+        </product>
+      </function>
+      <function name="aero/moment/Yaw_p">
+        <description>Yaw due to roll rate.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/p-aero-rad_sec</property>
+          <value>-0.04</value>
+        </product>
+      </function>
+      <function name="aero/moment/Yaw_rudder">
+        <description>Positive rudder TE right, nose-right yaw moment.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>-0.14</value>
+        </product>
+      </function>
+      <function name="aero/moment/Yaw_aileron">
+        <description>Adverse yaw, small.</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/aileron-pos-rad</property>
+          <value>0.01</value>
+        </product>
+      </function>
+    </axis>
+  </aerodynamics>
+
+  <output name="BGM109.csv" type="CSV" rate="10">
+    <property>simulation/sim-time-sec</property>
+    <property>position/h-sl-ft</property>
+    <property>velocities/mach</property>
+    <property>velocities/vt-fps</property>
+    <property>flight-path/gamma-deg</property>
+    <property>attitude/theta-deg</property>
+    <property>attitude/phi-deg</property>
+    <property>attitude/psi-deg</property>
+    <property>aero/alpha-deg</property>
+    <property>propulsion/engine[0]/thrust-lbs</property>
+    <property>propulsion/total-fuel-lbs</property>
+    <property>fcs/booster-command</property>
+    <property>fcs/wings-deployed</property>
+    <property>inertia/weight-lbs</property>
+  </output>
+
+</fdm_config>

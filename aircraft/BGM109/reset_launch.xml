@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<initialize name="BGM-109 surface launch, booster lit">
+  <!-- Just clear of the rail / VLS, nose high, booster burning. -->
+  <latitude unit="DEG">  32.4 </latitude>
+  <longitude unit="DEG"> -99.8 </longitude>
+  <altitude unit="FT">   120.0 </altitude>
+  <vt unit="FT/SEC">      90.0 </vt>
+  <gamma unit="DEG">      40.0 </gamma>
+  <theta unit="DEG">      40.0 </theta>
+  <phi unit="DEG">         0.0 </phi>
+  <psi unit="DEG">        90.0 </psi>
+  <running>               -1   </running>
+</initialize>

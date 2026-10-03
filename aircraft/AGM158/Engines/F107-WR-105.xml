@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<!--
+  Williams F107-WR-105
+  Turbofan for AGM-158B JASSM-ER.
+
+  Open-source anchor: 1,400 lbf SL static (Wikipedia / Air & Space Forces).
+  Bypass and TSFC are F107-family estimates. The MilThrust table is scaled
+  so installed thrust near Mach 0.80 / sea level is about 1,050 lbf, and
+  the cruise autopilot trims near 550-700 lbf.
+-->
+<turbine_engine name="F107-WR-105">
+  <milthrust unit="LBS"> 1400.0 </milthrust>
+  <bypassratio>             1.2 </bypassratio>
+  <tsfc>                   0.650 </tsfc>
+  <bleed>                  0.02 </bleed>
+  <idlen1>                 28.0 </idlen1>
+  <idlen2>                 55.0 </idlen2>
+  <maxn1>                 100.0 </maxn1>
+  <maxn2>                 100.0 </maxn2>
+  <n1spinup>                3.0 </n1spinup>
+  <n2spinup>                1.6 </n2spinup>
+  <n1startrate>             1.0 </n1startrate>
+  <n2startrate>             1.4 </n2startrate>
+  <augmented>                 0 </augmented>
+  <injected>                  0 </injected>
+  <disable-windmill>          1 </disable-windmill>
+
+  <function name="IdleThrust">
+    <table>
+      <independentVar lookup="row">velocities/mach</independentVar>
+      <independentVar lookup="column">atmosphere/density-altitude</independentVar>
+      <tableData>
+            -10000     0     10000   20000   30000   40000
+        0.0   0.08   0.07    0.06    0.05    0.04    0.02
+        0.4   0.06   0.05    0.04    0.03    0.02    0.01
+        0.8   0.03   0.02    0.02    0.01    0.01    0.00
+        0.95  0.00   0.00    0.00    0.00    0.00    0.00
+      </tableData>
+    </table>
+  </function>
+
+  <function name="MilThrust">
+    <table>
+      <independentVar lookup="row">velocities/mach</independentVar>
+      <independentVar lookup="column">atmosphere/density-altitude</independentVar>
+      <tableData>
+            -10000     0     10000   20000   30000   40000
+        0.0   1.04   1.00    0.74    0.52    0.36    0.22
+        0.4   1.02   0.98    0.73    0.52    0.36    0.22
+        0.6   0.98   0.94    0.71    0.51    0.35    0.21
+        0.8   0.90   0.86    0.66    0.48    0.33    0.19
+        0.9   0.72   0.68    0.50    0.34    0.22    0.10
+      </tableData>
+    </table>
+  </function>
+</turbine_engine>

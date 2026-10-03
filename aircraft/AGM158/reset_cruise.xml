@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<initialize name="AGM-158B low-level cruise, wings deployed">
+  <latitude unit="DEG">   32.4 </latitude>
+  <longitude unit="DEG"> -99.8 </longitude>
+  <altitude unit="FT">   500.0 </altitude>
+  <vt unit="FT/SEC">     870.0 </vt>
+  <alpha unit="DEG">       2.4 </alpha>
+  <gamma unit="DEG">       0.0 </gamma>
+  <phi unit="DEG">         0.0 </phi>
+  <psi unit="DEG">        90.0 </psi>
+  <running>               -1   </running>
+</initialize>
